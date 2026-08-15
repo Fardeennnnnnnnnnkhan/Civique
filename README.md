@@ -83,3 +83,4 @@ Ensure everything is running successfully by querying the service health endpoin
   ```bash
   curl http://localhost:8000/health
   ```
+
