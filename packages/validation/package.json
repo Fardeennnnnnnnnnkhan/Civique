@@ -1,0 +1,10 @@
+{
+  "name": "@civique/validation",
+  "version": "1.0.0",
+  "description": "Shared Zod validation schemas for Civique",
+  "main": "index.ts",
+  "private": true,
+  "dependencies": {
+    "zod": "^3.22.4"
+  }
+}

@@ -1,0 +1,162 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  CITIZEN
+  FIELD_WORKER
+  WARD_OFFICER
+  DEPARTMENT_HEAD
+  ZONAL_OFFICER
+  COMMISSIONER
+  CITY_ADMIN
+  SUPER_ADMIN
+}
+
+enum IncidentStatus {
+  REPORTED
+  AI_REVIEW
+  OPEN
+  ACKNOWLEDGED
+  ASSIGNED
+  IN_PROGRESS
+  RESOLUTION_SUBMITTED
+  AI_VERIFICATION
+  CITIZEN_CONFIRMATION
+  RESOLVED
+  DUPLICATE
+  REJECTED
+  ESCALATED
+  DISPUTED
+  REOPENED
+}
+
+enum PriorityLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model User {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                 String?   @unique
+  phoneNumber           String?   @unique @map("phone_number")
+  passwordHash          String?   @map("password_hash")
+  role                  UserRole  @default(CITIZEN)
+  cityId                String?   @db.Uuid @map("city_id")
+  zoneId                String?   @db.Uuid @map("zone_id")
+  wardId                String?   @db.Uuid @map("ward_id")
+  departmentId          String?   @db.Uuid @map("department_id")
+  active                Boolean   @default(true)
+  notificationInApp     Boolean   @default(true) @map("notification_in_app")
+  notificationEmail     Boolean   @default(true) @map("notification_email")
+  notificationSms       Boolean   @default(true) @map("notification_sms")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  reports               Report[]  @relation("Submitter")
+  assignedIncidents     Incident[] @relation("AssignedTo")
+  createdIncidents      Incident[] @relation("AssignedBy")
+  resolvedIncidents     Incident[] @relation("Worker")
+
+  @@map("users")
+}
+
+model Report {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incidentId         String?   @db.Uuid @map("incident_id")
+  submitterRef       String?   @db.Uuid @map("submitter_ref")
+  anonymousToken     String?   @map("anonymous_token")
+  photoUrl           String    @map("photo_url")
+  description        String?
+  voiceTranscript    String?   @map("voice_transcript")
+  categorySuggested  String?   @map("category_suggested")
+  categoryConfirmed  String?   @map("category_confirmed")
+  categoryConfidence Decimal?  @db.Decimal(5, 2) @map("category_confidence")
+  latitude           Float
+  longitude          Float
+  captureMethod      String    @default("CAMERA_LIVE") @map("capture_method")
+  deviceTimestamp    DateTime? @map("device_timestamp")
+  gpsTimestamp       DateTime? @map("gps_timestamp")
+  imageHash          String?   @map("image_hash")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  incident           Incident? @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  submitter          User?     @relation("Submitter", fields: [submitterRef], references: [id], onDelete: SetNull)
+
+  @@map("reports")
+}
+
+model Incident {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  publicTrackingId String         @unique @map("public_tracking_id")
+  category         String
+  status           IncidentStatus @default(REPORTED)
+  priority         PriorityLevel  @default(MEDIUM)
+  priorityScore    Int            @default(0) @map("priority_score")
+  latitude         Float
+  longitude        Float
+  cityId           String?        @db.Uuid @map("city_id")
+  zoneId           String?        @db.Uuid @map("zone_id")
+  wardId           String?        @db.Uuid @map("ward_id")
+  departmentId     String?        @db.Uuid @map("department_id")
+  reportCount      Int            @default(1) @map("report_count")
+  beforePhotoUrls  String[]       @map("before_photo_urls")
+  afterPhotoUrls   String[]       @map("after_photo_urls")
+  workerRef        String?        @db.Uuid @map("worker_ref")
+  resolvedNotes    String?        @map("resolved_notes")
+  slaDeadline      DateTime?      @map("sla_deadline")
+  slaBreached      Boolean        @default(false) @map("sla_breached")
+  assignedTo       String?        @db.Uuid @map("assigned_to")
+  assignedBy       String?        @db.Uuid @map("assigned_by")
+  assignedAt       DateTime?      @map("assigned_at")
+  startedAt        DateTime?      @map("started_at")
+  completedAt      DateTime?      @map("completed_at")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  resolvedAt       DateTime?      @map("resolved_at")
+
+  // Relations
+  reports          Report[]
+  worker           User?          @relation("Worker", fields: [workerRef], references: [id])
+  assignee         User?          @relation("AssignedTo", fields: [assignedTo], references: [id])
+  creator          User?          @relation("AssignedBy", fields: [assignedBy], references: [id])
+  auditLogs        AuditLog[]
+
+  @@map("incidents")
+}
+
+model Department {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                  String
+  cityId                String?  @db.Uuid @map("city_id")
+  handledCategories     String[] @map("handled_categories")
+  defaultSlaHours       Int      @default(24) @map("default_sla_hours")
+  warningThresholdHours Int      @default(4) @map("warning_threshold_hours")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@map("departments")
+}
+
+model AuditLog {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incidentId   String   @db.Uuid @map("incident_id")
+  eventType    String   @map("event_type")
+  actor        String
+  previousHash String?  @map("previous_hash")
+  currentHash  String   @map("current_hash")
+  metadata     Json?
+  timestamp    DateTime @default(now())
+
+  // Relations
+  incident     Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@map("audit_logs")
+}

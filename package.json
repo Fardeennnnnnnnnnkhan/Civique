@@ -1,0 +1,23 @@
+{
+  "name": "civique-monorepo",
+  "version": "1.0.0",
+  "description": "Civique - AI-Powered Civic Issue Reporting, Verification & Resolution Platform",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=services/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:worker": "npm run dev --workspace=services/worker",
+    "build:web": "npm build --workspace=apps/web",
+    "build:api": "npm build --workspace=services/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

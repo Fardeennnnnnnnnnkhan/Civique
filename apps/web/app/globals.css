@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+:root {
+  --background: #faf9f6;
+  --foreground: #351008;
+}
+
+@theme inline {
+  --color-primary: #5E1801;
+  --color-primary-container: #5e1801;
+  --color-on-primary: #ffffff;
+  --color-secondary: #CCB999;
+  --color-secondary-container: #f2ddbb;
+  --color-background: #faf9f6;
+  --color-surface-bright: #faf9f6;
+  --color-surface-muted: #F7F4EE;
+  --color-surface: #ffffff;
+  --color-border-light: #E9E1D8;
+  --color-border-strong: #D8CCC0;
+  --color-text-primary: #351008;
+  --color-text-secondary: #6F625C;
+  --color-text-muted: #9B9088;
+  --color-status-resolved: #12B76A;
+  --color-error: #ba1a1a;
+
+  --font-sans: var(--font-poppins), sans-serif;
+  --font-display: var(--font-poppins), sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-poppins), sans-serif;
+  min-height: 100vh;
+}
+
+/* Custom premium input styling */
+.premium-input {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background-color: #ffffff;
+  border: 1.5px solid #E9E1D8;
+  border-radius: 0.75rem; /* xl */
+}
+
+.premium-input:focus {
+  outline: none;
+  border-color: #CCB999;
+  background-color: #ffffff;
+  box-shadow: 0 4px 20px rgba(204, 185, 153, 0.15), 0 0 0 3px rgba(204, 185, 153, 0.25);
+  transform: translateY(-1px);
+}
+
+/* Custom premium primary button styling */
+.premium-btn-primary {
+  background: linear-gradient(135deg, #5E1801 0%, #421000 100%);
+  color: #ffffff;
+  border-radius: 0.75rem; /* xl */
+  font-weight: 500;
+  box-shadow: 0 4px 14px rgba(94, 24, 1, 0.25);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.premium-btn-primary:hover {
+  background: linear-gradient(135deg, #741e01 0%, #5E1801 100%);
+  box-shadow: 0 6px 20px rgba(94, 24, 1, 0.35);
+  transform: translateY(-1.5px);
+}
+
+.premium-btn-primary:active {
+  transform: translateY(0.5px);
+  box-shadow: 0 2px 8px rgba(94, 24, 1, 0.2);
+}

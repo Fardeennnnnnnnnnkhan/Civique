@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Live Civic Map - Civique Admin</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Manrope:wght@600;700&amp;family=JetBrains+Mono&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-high": "#e9e8e5",
+                        "text-primary": "#351008",
+                        "on-surface": "#1a1c1a",
+                        "on-primary-container": "#e47c5c",
+                        "surface-bright": "#faf9f6",
+                        "inverse-surface": "#2f312f",
+                        "primary-container": "#5e1801",
+                        "tertiary-fixed": "#dae1ff",
+                        "status-resolved": "#12B76A",
+                        "text-secondary": "#6F625C",
+                        "surface-container-lowest": "#ffffff",
+                        "primary": "#3b0b00",
+                        "secondary-fixed-dim": "#d7c4a3",
+                        "secondary-container": "#f2ddbb",
+                        "on-surface-variant": "#55423d",
+                        "surface-tint": "#9b4428",
+                        "status-reported": "#2E90FA",
+                        "on-primary": "#ffffff",
+                        "surface-container-low": "#f4f3f1",
+                        "on-secondary-fixed-variant": "#52452c",
+                        "surface": "#FFFFFF",
+                        "error": "#ba1a1a",
+                        "on-background": "#1a1c1a",
+                        "text-muted": "#9B9088",
+                        "status-escalated": "#B42318",
+                        "surface-container": "#efeeeb",
+                        "tertiary-container": "#002b75",
+                        "outline-variant": "#dcc1b9",
+                        "on-tertiary-fixed-variant": "#23438c",
+                        "on-secondary-fixed": "#241a05",
+                        "surface-dim": "#dbdad7",
+                        "on-tertiary-container": "#7a96e5",
+                        "on-tertiary-fixed": "#001849",
+                        "on-secondary-container": "#6f6146",
+                        "status-assigned": "#7F56D9",
+                        "primary-fixed": "#ffdbd0",
+                        "outline": "#89726c",
+                        "on-primary-fixed": "#3a0b00",
+                        "on-error": "#ffffff",
+                        "tertiary-fixed-dim": "#b3c5ff",
+                        "tertiary": "#001849",
+                        "surface-variant": "#e3e2e0",
+                        "border-light": "#E9E1D8",
+                        "on-primary-fixed-variant": "#7c2d13",
+                        "on-tertiary": "#ffffff",
+                        "primary-fixed-dim": "#ffb59e",
+                        "background": "#faf9f6",
+                        "error-container": "#ffdad6",
+                        "priority-high": "#EF6820",
+                        "surface-muted": "#F7F4EE",
+                        "secondary-fixed": "#f4e0be",
+                        "secondary": "#6b5c42",
+                        "on-secondary": "#ffffff",
+                        "border-strong": "#D8CCC0",
+                        "on-error-container": "#93000a",
+                        "inverse-on-surface": "#f1f1ee",
+                        "inverse-primary": "#ffb59e",
+                        "surface-container-highest": "#e3e2e0",
+                        "priority-critical": "#B42318"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-xs": "4px",
+                        "stack-xl": "64px",
+                        "container-max": "1440px",
+                        "gutter": "24px",
+                        "sidebar-width": "272px",
+                        "margin-mobile": "16px",
+                        "stack-sm": "8px",
+                        "stack-md": "16px",
+                        "stack-lg": "32px"
+                    },
+                    "fontFamily": {
+                        "body": ["Inter"],
+                        "h3": ["Manrope"],
+                        "label-small": ["Inter"],
+                        "technical": ["JetBrains Mono"],
+                        "body-medium": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "h1": ["Manrope"],
+                        "h4": ["Manrope"],
+                        "h2": ["Manrope"],
+                        "display": ["Manrope"],
+                        "caption": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body": ["14px", {"lineHeight": "22px", "fontWeight": "400"}],
+                        "h3": ["22px", {"lineHeight": "30px", "fontWeight": "600"}],
+                        "label-small": ["13px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "technical": ["13px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "body-medium": ["14px", {"lineHeight": "22px", "fontWeight": "500"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "h1": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                        "h4": ["18px", {"lineHeight": "26px", "fontWeight": "600"}],
+                        "h2": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                        "display": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "caption": ["12px", {"lineHeight": "18px", "letterSpacing": "0.02em", "fontWeight": "500"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .map-marker-selected {
+            box-shadow: 0 0 0 4px var(--tw-colors-secondary-container);
+        }
+        .map-cluster {
+            background-color: var(--tw-colors-surface-container-high);
+            border: 2px solid var(--tw-colors-surface);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body h-screen flex overflow-hidden">
+<!-- Desktop Sidebar -->
+<nav class="hidden md:flex flex-col h-screen w-sidebar-width fixed left-0 top-0 border-r border-outline-variant/20 shadow-sm bg-primary-container text-on-primary py-stack-md z-50">
+<div class="px-gutter mb-8">
+<h1 class="font-h4 text-h4 font-display text-on-primary">Civique</h1>
+<p class="font-caption text-caption text-on-primary/70 mt-1">City Management Portal</p>
+</div>
+<div class="flex flex-col gap-1 px-2 flex-grow">
+<a class="flex items-center gap-3 text-on-primary/70 hover:text-on-primary hover:bg-on-primary-container/10 px-4 py-3 rounded-md transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-body-medium text-body-medium">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 bg-on-primary-container/15 text-secondary-fixed border-l-4 border-secondary-fixed px-4 py-3 rounded-md active:scale-[0.98] transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="event_note">event_note</span>
+<span class="font-body-medium text-body-medium">Incidents</span>
+</a>
+<a class="flex items-center gap-3 text-on-primary/70 hover:text-on-primary hover:bg-on-primary-container/10 px-4 py-3 rounded-md transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="monitoring">monitoring</span>
+<span class="font-body-medium text-body-medium">Analytics</span>
+</a>
+<a class="flex items-center gap-3 text-on-primary/70 hover:text-on-primary hover:bg-on-primary-container/10 px-4 py-3 rounded-md transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-body-medium text-body-medium">Citizens</span>
+</a>
+<a class="flex items-center gap-3 text-on-primary/70 hover:text-on-primary hover:bg-on-primary-container/10 px-4 py-3 rounded-md transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="inventory_2">inventory_2</span>
+<span class="font-body-medium text-body-medium">Resources</span>
+</a>
+<a class="flex items-center gap-3 text-on-primary/70 hover:text-on-primary hover:bg-on-primary-container/10 px-4 py-3 rounded-md transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-body-medium text-body-medium">Settings</span>
+</a>
+</div>
+<div class="px-4 mb-4">
+<button class="w-full bg-secondary-container text-on-secondary-container font-body-medium text-body-medium py-2 rounded-md hover:bg-secondary-fixed transition-colors">
+                Report Emergency
+            </button>
+</div>
+<div class="flex flex-col gap-1 px-2 mt-auto border-t border-outline-variant/20 pt-4">
+<a class="flex items-center gap-3 text-on-primary/70 hover:text-on-primary hover:bg-on-primary-container/10 px-4 py-3 rounded-md transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span class="font-body-medium text-body-medium">Help Center</span>
+</a>
+<a class="flex items-center gap-3 text-on-primary/70 hover:text-on-primary hover:bg-on-primary-container/10 px-4 py-3 rounded-md transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="font-body-medium text-body-medium">Logout</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col md:ml-sidebar-width relative">
+<!-- Top App Bar -->
+<header class="flex justify-between items-center w-full px-gutter h-16 sticky top-0 z-40 bg-surface-bright border-b border-border-light flat no shadows md:hidden">
+<div class="flex items-center gap-2">
+<span class="font-h3 text-h3 font-display font-bold text-primary">Civique</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-primary hover:bg-surface-container-low rounded-full transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+</button>
+<button class="p-2 text-primary hover:bg-surface-container-low rounded-full transition-colors cursor-pointer active:opacity-80 relative">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-1 right-1 w-2 h-2 bg-priority-high rounded-full"></span>
+</button>
+</div>
+</header>
+<!-- Map Container -->
+<div class="flex-1 relative flex">
+<!-- Filter Rail (Desktop) -->
+<aside class="hidden lg:flex flex-col w-64 bg-surface border-r border-border-light h-full overflow-y-auto shrink-0 shadow-[1px_0_0_0_rgba(233,225,216,0.5)] z-10">
+<div class="p-4 border-b border-border-light">
+<h2 class="font-h4 text-h4 text-text-primary">Live Map Filters</h2>
+<p class="font-caption text-caption text-text-secondary mt-1">Real-time civic data</p>
+</div>
+<div class="p-4 space-y-6">
+<!-- Search -->
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-2.5 text-text-muted text-sm" data-icon="search">search</span>
+<input class="w-full pl-9 pr-3 py-2 bg-surface-container-low border-none rounded-md text-body-medium font-body focus:ring-1 focus:ring-primary focus:bg-surface transition-colors" placeholder="Search incidents..." type="text"/>
+</div>
+<!-- Category Filter -->
+<div>
+<h3 class="font-label-small text-label-small text-text-secondary uppercase tracking-wider mb-3">Category</h3>
+<div class="space-y-2">
+<label class="flex items-center gap-2 cursor-pointer group">
+<input checked="" class="form-checkbox text-primary rounded border-outline-variant focus:ring-primary" type="checkbox"/>
+<span class="font-body text-body text-text-primary group-hover:text-primary transition-colors">Infrastructure</span>
+<span class="ml-auto text-caption font-caption text-text-muted bg-surface-container px-2 py-0.5 rounded-full">12</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer group">
+<input checked="" class="form-checkbox text-primary rounded border-outline-variant focus:ring-primary" type="checkbox"/>
+<span class="font-body text-body text-text-primary group-hover:text-primary transition-colors">Sanitation</span>
+<span class="ml-auto text-caption font-caption text-text-muted bg-surface-container px-2 py-0.5 rounded-full">8</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer group">
+<input class="form-checkbox text-primary rounded border-outline-variant focus:ring-primary" type="checkbox"/>
+<span class="font-body text-body text-text-primary group-hover:text-primary transition-colors">Traffic</span>
+<span class="ml-auto text-caption font-caption text-text-muted bg-surface-container px-2 py-0.5 rounded-full">24</span>
+</label>
+</div>
+</div>
+<!-- Priority Filter -->
+<div>
+<h3 class="font-label-small text-label-small text-text-secondary uppercase tracking-wider mb-3">Priority</h3>
+<div class="flex flex-wrap gap-2">
+<button class="px-3 py-1.5 rounded-full border border-status-escalated bg-status-escalated/10 text-status-escalated font-caption text-caption flex items-center gap-1 hover:bg-status-escalated/20 transition-colors">
+<span class="w-2 h-2 rounded-full bg-status-escalated"></span> Critical
+                            </button>
+<button class="px-3 py-1.5 rounded-full border border-priority-high bg-priority-high/10 text-priority-high font-caption text-caption flex items-center gap-1 hover:bg-priority-high/20 transition-colors">
+<span class="w-2 h-2 rounded-full bg-priority-high"></span> High
+                            </button>
+<button class="px-3 py-1.5 rounded-full border border-outline-variant text-text-secondary font-caption text-caption flex items-center gap-1 hover:bg-surface-container transition-colors">
+<span class="w-2 h-2 rounded-full bg-status-reported"></span> Medium
+                            </button>
+</div>
+</div>
+<!-- Status Filter -->
+<div>
+<h3 class="font-label-small text-label-small text-text-secondary uppercase tracking-wider mb-3">Status</h3>
+<div class="space-y-2">
+<label class="flex items-center gap-2 cursor-pointer group">
+<input checked="" class="form-checkbox text-primary rounded border-outline-variant focus:ring-primary" type="checkbox"/>
+<span class="font-body text-body text-text-primary group-hover:text-primary transition-colors">Reported</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer group">
+<input checked="" class="form-checkbox text-primary rounded border-outline-variant focus:ring-primary" type="checkbox"/>
+<span class="font-body text-body text-text-primary group-hover:text-primary transition-colors">Assigned</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer group">
+<input class="form-checkbox text-primary rounded border-outline-variant focus:ring-primary" type="checkbox"/>
+<span class="font-body text-body text-text-primary group-hover:text-primary transition-colors">Resolved</span>
+</label>
+</div>
+</div>
+</div>
+</aside>
+<!-- Actual Map Area -->
+<div class="flex-1 relative bg-surface-muted" data-location="City Map" style="">
+<!-- Map Background Placeholder -->
+<div class="absolute inset-0 z-0">
+<div class="bg-cover bg-center w-full h-full opacity-60" data-alt="A highly detailed, modern, desaturated cartographic map view of a metropolitan city center. The style is strictly minimalist and corporate, utilizing a color palette of subtle off-whites, cool greys, and faint sand tones. Roads and geographical features are rendered with crisp, thin lines, avoiding bright or garish colors to maintain a premium, data-focused dashboard aesthetic." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAOpVjuMpFceiR0suoKL0bZRPqqEfVteJ7ZGwRE-6JvmLYbM39tp24edJf2yXY20qxow2VC_cNEPmf02oSXahxGd02bfkCS7XEpTwjiTriDsJOFgkmyCPu1d69CO_uUJae4pNdoCIjAIoJq7Eyv7livdTTb6wv0I-Y84y3TWdMkFUTssBoaah7UwuZzKUaxyyBbZ9Q1QZHyKtmGi3jaVEkSi5azmeEHt_sQUsIb8lDu7rxVvdUoIf3X5A')"></div>
+</div>
+<!-- Map Overlay Controls -->
+<div class="absolute top-4 right-4 z-20 flex flex-col gap-2">
+<button class="w-10 h-10 bg-surface rounded-md shadow-sm border border-border-light flex items-center justify-center text-text-primary hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+</button>
+<button class="w-10 h-10 bg-surface rounded-md shadow-sm border border-border-light flex items-center justify-center text-text-primary hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined" data-icon="remove">remove</span>
+</button>
+<button class="w-10 h-10 bg-surface rounded-md shadow-sm border border-border-light flex items-center justify-center text-text-primary hover:bg-surface-container-low transition-colors mt-2">
+<span class="material-symbols-outlined" data-icon="my_location">my_location</span>
+</button>
+</div>
+<!-- Map Markers (Simulated) -->
+<!-- Critical Marker -->
+<div class="absolute top-[30%] left-[45%] z-10 transform -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
+<div class="w-8 h-8 bg-surface rounded-full shadow-md flex items-center justify-center border-2 border-priority-critical relative">
+<div class="w-3 h-3 bg-priority-critical rounded-full animate-pulse"></div>
+<!-- Tooltip -->
+<div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-inverse-surface text-surface text-caption font-caption p-2 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+<div class="font-bold mb-1">Water Main Break</div>
+<div class="text-surface-dim">Priority: Critical</div>
+</div>
+</div>
+</div>
+<!-- High Priority Marker -->
+<div class="absolute top-[50%] left-[25%] z-10 transform -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
+<div class="w-8 h-8 bg-surface rounded-full shadow-md flex items-center justify-center border-2 border-priority-high">
+<div class="w-3 h-3 bg-priority-high rounded-full"></div>
+</div>
+</div>
+<!-- Selected Marker (Brown center, sand ring) -->
+<div class="absolute top-[60%] left-[60%] z-20 transform -translate-x-1/2 -translate-y-1/2 cursor-pointer">
+<div class="w-10 h-10 bg-surface rounded-full shadow-lg flex items-center justify-center map-marker-selected">
+<div class="w-4 h-4 bg-primary rounded-full"></div>
+</div>
+</div>
+<!-- Cluster Marker -->
+<div class="absolute top-[20%] left-[70%] z-10 transform -translate-x-1/2 -translate-y-1/2 cursor-pointer">
+<div class="w-12 h-12 rounded-full flex items-center justify-center map-cluster text-text-primary font-h4 font-h4">
+                        14
+                    </div>
+</div>
+<!-- Standard Marker -->
+<div class="absolute top-[75%] left-[35%] z-10 transform -translate-x-1/2 -translate-y-1/2 group cursor-pointer">
+<div class="w-6 h-6 bg-surface rounded-full shadow-sm flex items-center justify-center border-2 border-status-reported">
+<div class="w-2 h-2 bg-status-reported rounded-full"></div>
+</div>
+</div>
+</div>
+<!-- Contextual Side Panel (Slide over on small screens, fixed right on large if active) -->
+<aside class="absolute inset-y-0 right-0 w-80 bg-surface shadow-[-4px_0_24px_rgba(0,0,0,0.05)] border-l border-border-light z-30 transform transition-transform duration-300 translate-x-0 flex flex-col">
+<div class="p-4 border-b border-border-light flex justify-between items-start">
+<div>
+<div class="inline-flex items-center gap-1 px-2 py-1 rounded bg-secondary-container/30 text-secondary-fixed-dim font-caption text-caption mb-2">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                            Infrastructure
+                        </div>
+<h2 class="font-h3 text-h3 text-text-primary leading-tight">Pothole on Main St.</h2>
+<p class="font-caption text-caption text-text-secondary mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="location_on">location_on</span>
+                            123 Main St, Ward 4
+                        </p>
+</div>
+<button class="p-1 text-text-muted hover:text-text-primary rounded hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+</div>
+<div class="flex-1 overflow-y-auto p-4 space-y-6">
+<!-- Image -->
+<div class="w-full h-32 rounded-lg bg-surface-container-low overflow-hidden border border-border-light">
+<img class="w-full h-full object-cover" data-alt="A close-up, high-resolution photograph of a significant pothole in an urban asphalt road. The image is taken from a slightly elevated angle, showing the rough edges of the damaged pavement and minor debris inside. The lighting suggests daytime with overcast conditions, casting soft shadows. The overall tone is realistic and documentary, fitting for a civic maintenance report." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD4ZOpCIgkyxLaOur4ocQml6g6oChwx2CicUqYmavxCFci0LjUexFiFYNha3ylhLE2amECick6TpEfrS5oPQ8wkcizBbsmtUIoOfU3mT6M6QYZrL2ahdWmdCtXoEOdKdF6qzi9Y50bl20zfHNCKkyzJE3fSX8eczGeEjTIpYT3AkZk2DsNrM2RbmAWtVyYIQL4FYaK65XYMbd18EXkZ0s7i0OwBIIy5F9olBzL1UuhDlawVQ1-FEA6qZA"/>
+</div>
+<!-- Metadata Grid -->
+<div class="grid grid-cols-2 gap-4">
+<div>
+<span class="font-label-small text-label-small text-text-secondary block">Reported By</span>
+<span class="font-body-medium text-body-medium text-text-primary">Citizen App</span>
+</div>
+<div>
+<span class="font-label-small text-label-small text-text-secondary block">Date</span>
+<span class="font-body-medium text-body-medium text-text-primary">Oct 24, 2:30 PM</span>
+</div>
+<div>
+<span class="font-label-small text-label-small text-text-secondary block">Status</span>
+<span class="font-body-medium text-body-medium text-status-assigned flex items-center gap-1">
+                                Assigned
+                            </span>
+</div>
+<div>
+<span class="font-label-small text-label-small text-text-secondary block">Priority</span>
+<span class="font-body-medium text-body-medium text-priority-high">High</span>
+</div>
+</div>
+<!-- Description -->
+<div>
+<span class="font-label-small text-label-small text-text-secondary block mb-1">Description</span>
+<p class="font-body text-body text-text-primary">Large pothole in the right lane causing vehicles to swerve. Needs immediate patching before expected rainfall.</p>
+</div>
+<!-- Timeline -->
+<div>
+<span class="font-label-small text-label-small text-text-secondary block mb-3">Activity Timeline</span>
+<div class="relative pl-4 border-l-2 border-border-light space-y-4">
+<div class="relative">
+<span class="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-status-assigned ring-4 ring-surface"></span>
+<p class="font-body-medium text-body-medium text-text-primary text-sm">Crew Dispatched</p>
+<p class="font-caption text-caption text-text-secondary">Today, 9:00 AM • Dept of Transit</p>
+</div>
+<div class="relative">
+<span class="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-outline-variant ring-4 ring-surface"></span>
+<p class="font-body-medium text-body-medium text-text-primary text-sm">Reviewed by Admin</p>
+<p class="font-caption text-caption text-text-secondary">Yesterday, 4:15 PM • System</p>
+</div>
+<div class="relative">
+<span class="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-outline-variant ring-4 ring-surface"></span>
+<p class="font-body-medium text-body-medium text-text-primary text-sm">Report Submitted</p>
+<p class="font-caption text-caption text-text-secondary">Oct 24, 2:30 PM • Citizen App</p>
+</div>
+</div>
+</div>
+</div>
+<div class="p-4 border-t border-border-light bg-surface-bright grid grid-cols-2 gap-2">
+<button class="px-4 py-2 bg-surface border border-border-strong text-text-primary font-body-medium text-body-medium rounded hover:bg-surface-container-low transition-colors text-center">
+                        Edit
+                    </button>
+<button class="px-4 py-2 bg-primary text-on-primary font-body-medium text-body-medium rounded hover:bg-primary/90 transition-colors text-center">
+                        Update Status
+                    </button>
+</div>
+</aside>
+</div>
+</main>
+<!-- Mobile Bottom Navigation (Visible only on small screens) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-margin-mobile py-2 pb-safe bg-surface border-t border-border-light shadow-lg md:hidden rounded-t-xl">
+<a class="flex flex-col items-center justify-center text-text-muted hover:text-primary transition-all duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-caption text-caption mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 active:scale-95 transition-all duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="campaign">campaign</span>
+<span class="font-caption text-caption mt-1">Reports</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-muted hover:text-primary transition-all duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="timeline">timeline</span>
+<span class="font-caption text-caption mt-1">Activity</span>
+</a>
+<a class="flex flex-col items-center justify-center text-text-muted hover:text-primary transition-all duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-caption text-caption mt-1">Profile</span>
+</a>
+</nav>
+</body></html>

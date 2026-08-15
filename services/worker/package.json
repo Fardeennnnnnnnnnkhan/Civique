@@ -1,0 +1,22 @@
+{
+  "name": "@civique/worker",
+  "version": "1.0.0",
+  "description": "Civique Background Queue Worker Service (Simplified Mock Shell)",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "@types/pg": "^8.11.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.3"
+  }
+}
