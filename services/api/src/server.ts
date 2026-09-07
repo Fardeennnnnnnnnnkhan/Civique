@@ -1,26 +1,25 @@
-import dotenv from 'dotenv';
-import path from 'path';
-
-// Load env from monorepo root
-dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
-
-import { prisma } from './app';
+import { validateEnvironment } from './utils/env';
+validateEnvironment();
 
 const PORT = process.env.PORT || 5000;
 
 async function startServer() {
   try {
-    console.log('Connecting to PostgreSQL database via Prisma...');
-    // Query db to check if credentials and network connection succeed
-    const res: any = await prisma.$queryRaw`SELECT NOW()`;
-    console.log('PostgreSQL database connected successfully via Prisma. Current Time:', res[0].now);
-
     const app = require('./app').default;
-    app.listen(PORT, () => {
-      console.log(`Civique API running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode.`);
+    const http = require('http');
+    const { initSocket } = require('./utils/socket');
+    const { startDurableSlaJob } = require('./services/durableSla');
+
+    const server = http.createServer(app);
+    initSocket(server);
+    startDurableSlaJob();
+
+    // Force ts-node-dev reload to pick up connection_limit env variable
+    server.listen(PORT, () => {
+      console.log(`Civique API and WebSocket Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode.`);
     });
   } catch (error) {
-    console.error('Server database startup verification failed:', error);
+    console.error('Server startup failed:', error);
     process.exit(1);
   }
 }

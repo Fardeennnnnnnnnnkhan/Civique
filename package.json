@@ -12,8 +12,8 @@
     "dev:api": "npm run dev --workspace=services/api",
     "dev:web": "npm run dev --workspace=apps/web",
     "dev:worker": "npm run dev --workspace=services/worker",
-    "build:web": "npm build --workspace=apps/web",
-    "build:api": "npm build --workspace=services/api",
+    "build:web": "npm run build --workspace=apps/web",
+    "build:api": "npm run build --workspace=services/api",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present"
   },

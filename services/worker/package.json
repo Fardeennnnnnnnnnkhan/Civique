@@ -1,7 +1,7 @@
 {
   "name": "@civique/worker",
   "version": "1.0.0",
-  "description": "Civique Background Queue Worker Service (Simplified Mock Shell)",
+  "description": "Civique durable PostgreSQL job worker",
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",

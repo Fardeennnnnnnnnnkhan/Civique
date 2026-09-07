@@ -1,0 +1,15 @@
+import { UserRole } from '@prisma/client';
+
+export type Permission = 'REPORT_CREATE' | 'REPORT_READ_OWN' | 'INCIDENT_READ' | 'INCIDENT_ASSIGN' | 'INCIDENT_UPDATE' | 'USER_MANAGE' | 'ANALYTICS_READ';
+const matrix: Record<UserRole, readonly Permission[]> = {
+  CITIZEN: ['REPORT_CREATE', 'REPORT_READ_OWN', 'INCIDENT_READ'],
+  FIELD_WORKER: ['INCIDENT_READ', 'INCIDENT_UPDATE'],
+  WARD_OFFICER: ['INCIDENT_READ', 'INCIDENT_ASSIGN', 'INCIDENT_UPDATE', 'ANALYTICS_READ'],
+  DEPARTMENT_HEAD: ['INCIDENT_READ', 'INCIDENT_ASSIGN', 'INCIDENT_UPDATE', 'ANALYTICS_READ'],
+  ZONAL_OFFICER: ['INCIDENT_READ', 'INCIDENT_ASSIGN', 'INCIDENT_UPDATE', 'ANALYTICS_READ'],
+  COMMISSIONER: ['INCIDENT_READ', 'INCIDENT_ASSIGN', 'INCIDENT_UPDATE', 'ANALYTICS_READ', 'USER_MANAGE'],
+  CITY_ADMIN: ['INCIDENT_READ', 'INCIDENT_ASSIGN', 'INCIDENT_UPDATE', 'ANALYTICS_READ', 'USER_MANAGE'],
+  SUPER_ADMIN: ['REPORT_CREATE', 'REPORT_READ_OWN', 'INCIDENT_READ', 'INCIDENT_ASSIGN', 'INCIDENT_UPDATE', 'ANALYTICS_READ', 'USER_MANAGE'],
+};
+export function hasPermission(role: UserRole, permission: Permission): boolean { return matrix[role].includes(permission); }
+export function permissionsFor(role: UserRole): readonly Permission[] { return matrix[role]; }

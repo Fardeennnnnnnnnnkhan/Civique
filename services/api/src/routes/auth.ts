@@ -1,33 +1,29 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { prisma } from '../app';
+import { prisma } from '../db';
 import { UserRole } from '@prisma/client';
+import { createSession, rotateSession, revokeSession, revokeAllSessions, setSessionCookies } from '../utils/sessions';
+import rateLimit from 'express-rate-limit';
+import { AuthenticatedRequest, authenticateJWT } from '../middleware/auth';
 
 const router = Router();
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false, message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many authentication attempts' } } });
 
-const ACCESS_TOKEN_SECRET = process.env.JWT_ACCESS_SECRET || 'default_access_secret';
-const REFRESH_TOKEN_SECRET = process.env.JWT_REFRESH_SECRET || 'default_refresh_secret';
+const getAccessTokenSecret = () => { if (!process.env.JWT_ACCESS_SECRET) throw new Error('JWT_ACCESS_SECRET is not configured'); return process.env.JWT_ACCESS_SECRET; };
 
 function generateAccessToken(user: { id: string; email: string | null; role: UserRole }) {
   return jwt.sign(
     { id: user.id, email: user.email, role: user.role },
-    ACCESS_TOKEN_SECRET,
+    getAccessTokenSecret(),
     { expiresIn: '15m' }
   );
 }
 
-function generateRefreshToken(user: { id: string; email: string | null; role: UserRole }) {
-  return jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
-    REFRESH_TOKEN_SECRET,
-    { expiresIn: '7d' }
-  );
-}
 
 // POST /api/v1/auth/register
-router.post('/register', async (req: Request, res: Response) => {
-  const { email, password, phoneNumber, role } = req.body;
+router.post('/register', authLimiter, async (req: Request, res: Response) => {
+  const { email, password, phoneNumber } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({
@@ -70,19 +66,19 @@ router.post('/register', async (req: Request, res: Response) => {
         email,
         passwordHash,
         phoneNumber: phoneNumber || null,
-        role: role || UserRole.CITIZEN
+        role: UserRole.CITIZEN
       }
     });
 
     // Generate tokens
     const accessToken = generateAccessToken(newUser);
-    const refreshToken = generateRefreshToken(newUser);
+    const refreshToken = await createSession(newUser.id);
+    setSessionCookies(res, accessToken, refreshToken);
 
     res.status(201).json({
       success: true,
       data: {
         accessToken,
-        refreshToken,
         user: {
           id: newUser.id,
           email: newUser.email,
@@ -103,7 +99,7 @@ router.post('/register', async (req: Request, res: Response) => {
 });
 
 // POST /api/v1/auth/login
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', authLimiter, async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -143,13 +139,13 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user);
+    const refreshToken = await createSession(user.id);
+    setSessionCookies(res, accessToken, refreshToken);
 
     res.status(200).json({
       success: true,
       data: {
         accessToken,
-        refreshToken,
         user: {
           id: user.id,
           email: user.email,
@@ -170,8 +166,8 @@ router.post('/login', async (req: Request, res: Response) => {
 });
 
 // POST /api/v1/auth/refresh
-router.post('/refresh', async (req: Request, res: Response) => {
-  const { refreshToken } = req.body;
+router.post('/refresh', authLimiter, async (req: Request, res: Response) => {
+  const refreshToken = req.body.refreshToken || (req.headers.cookie || '').match(/(?:^|;\s*)civique_refresh=([^;]+)/)?.[1];
 
   if (!refreshToken) {
     return res.status(400).json({
@@ -184,10 +180,8 @@ router.post('/refresh', async (req: Request, res: Response) => {
   }
 
   try {
-    const decoded = jwt.verify(refreshToken, REFRESH_TOKEN_SECRET) as { id: string; email: string | null; role: UserRole };
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.id }
-    });
+    const rotated = await rotateSession(refreshToken);
+    const user = rotated ? await prisma.user.findUnique({ where: { id: rotated.userId } }) : null;
 
     if (!user || !user.active) {
       return res.status(403).json({
@@ -200,13 +194,12 @@ router.post('/refresh', async (req: Request, res: Response) => {
     }
 
     const newAccessToken = generateAccessToken(user);
-    const newRefreshToken = generateRefreshToken(user);
+    setSessionCookies(res, newAccessToken, rotated!.token);
 
     res.status(200).json({
       success: true,
       data: {
         accessToken: newAccessToken,
-        refreshToken: newRefreshToken
       }
     });
   } catch (err) {
@@ -221,12 +214,31 @@ router.post('/refresh', async (req: Request, res: Response) => {
 });
 
 // POST /api/v1/auth/logout
-router.post('/logout', (req: Request, res: Response) => {
-  // Simple token clearance response (client drops tokens)
+router.post('/logout', async (req: Request, res: Response) => {
+  const token = req.body.refreshToken || (req.headers.cookie || '').match(/(?:^|;\s*)civique_refresh=([^;]+)/)?.[1];
+  if (token) await revokeSession(token);
+  res.setHeader('Set-Cookie', 'civique_refresh=; HttpOnly; Path=/api/v1/auth; Max-Age=0; SameSite=Lax');
   res.status(200).json({
     success: true,
     message: 'Logged out successfully'
   });
+});
+
+router.post('/logout-all', async (req: Request, res: Response) => {
+  const token = req.body.refreshToken || (req.headers.cookie || '').match(/(?:^|;\s*)civique_refresh=([^;]+)/)?.[1];
+  if (token) { const session = await prisma.userSession.findUnique({ where: { tokenHash: require('../utils/sessions').hashToken(token) } }); if (session) await revokeAllSessions(session.userId); }
+  res.status(200).json({ success: true, message: 'All sessions revoked' });
+});
+
+router.get('/me', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { id: true, email: true, phoneNumber: true, role: true, cityId: true, zoneId: true, wardId: true, departmentId: true, active: true } });
+  if (!user) return res.status(404).json({ success: false, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
+  res.json({ success: true, data: { user } });
+});
+
+router.get('/sessions', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
+  const sessions = await prisma.userSession.findMany({ where: { userId: req.user!.id, revokedAt: null }, select: { id: true, createdAt: true, lastUsedAt: true, expiresAt: true }, orderBy: { createdAt: 'desc' } });
+  res.json({ success: true, data: { sessions } });
 });
 
 export default router;

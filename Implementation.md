@@ -2,6 +2,8 @@
 
 Civique is an AI-powered civic issue reporting, verification, and resolution platform designed to close the trust gap in civic grievance systems. It establishes a transparent, auditable, and automated loop from citizen reporting to verified resolution.
 
+> The detailed correction-first execution sequence, module gates, tests, and acceptance criteria are maintained in [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md). The approved frontend transformation sequence is maintained separately in [`docs/UI_IMPLEMENTATION_PLAN.md`](docs/UI_IMPLEMENTATION_PLAN.md). Existing prototype code across M1–M13 must pass the correction gates before it is considered complete.
+
 ---
 
 ## 1. Product Vision & Core Principles
@@ -33,21 +35,28 @@ Civique is organized into three distinct tiers (simplified for PostgreSQL/Supaba
 2. **Core Backend Layer**:
    - **Express.js API (TypeScript)** handling authentication, database transactions, routing, SLA management, and auditing.
    - Fully integrated with **Supabase / PostgreSQL** database layer.
-3. **Machine Learning Microservice**:
-   - **FastAPI (Python)** running PyTorch-based model inferences (image classification, duplicate detection, and visual verification) isolated behind REST endpoints.
+3. **AI and Machine Learning Layer**:
+   - **FastAPI (Python)** performs deterministic media preprocessing, evidence-quality checks, local image embeddings, and provider-neutral AI orchestration.
+   - **Groq Qwen 3.8 27B** (`qwen/qwen3.8-27b`) is the selected multimodal provider for advisory image validation, classification, uncertain duplicate review, severity signals, and before/after resolution analysis.
+   - Core reporting never depends on synchronous AI availability. Durable background jobs retry failed analysis and route unresolved cases to human review.
 
 ```mermaid
 graph TD
     Client[Citizen PWA / Admin Dashboard / Public Map]
     Express[Express.js Core REST API]
     FastAPI[Python FastAPI ML Service]
+    Groq[Groq Qwen 3.8 Vision]
+    Worker[Durable PostgreSQL Job Worker]
     PostgreSQL[(PostgreSQL / Supabase Database)]
-    S3[S3 / Cloudinary Storage]
+    S3[Private Supabase Object Storage]
 
     Client <-->|REST API| Express
     Express -->|Read/Write| PostgreSQL
-    Express -->|Inference Call| FastAPI
-    Express -->|Upload Media| S3
+    Express -->|Transactional Outbox| PostgreSQL
+    Worker -->|Claim Jobs| PostgreSQL
+    Worker -->|Analysis Request| FastAPI
+    FastAPI -->|Multimodal Request| Groq
+    Express -->|Private Media| S3
 ```
 
 ---
@@ -267,12 +276,16 @@ All error responses follow the standard format:
 
 ## 8. AI Services & ML Pipeline
 
-The FastAPI microservice implements five models:
-1. **Category Classification**: MobileNetV2 fine-tuned model classifying reports into categories (e.g., Pothole vs Garbage).
-2. **Image Embeddings (Duplicate Detection)**: Computes 1024-dimensional feature vectors. Complemented by coordinates distance checking, checking if reports share visual layout.
-3. **Priority & Urgency Scoring**: TF-IDF classification of description texts, combined with report density and category risk metrics.
-4. **Resolution Verification**: Pairs before/after images, runs structural similarity (SSIM) checks, and scans for object omission (e.g., garbage objects removed).
-5. **Predictive Hotspot Analytics**: Run-time model using **Prophet** on historical grid-based incident occurrences to identify high-risk wards for future periods.
+The AI layer uses deterministic local processing plus advisory multimodal analysis:
+
+1. **Media Validation and Preprocessing**: Decode untrusted images, verify actual format/integrity, normalize orientation and dimensions, remove unsafe metadata, create private derivatives, and calculate content hashes before any model receives an image.
+2. **Groq Multimodal Classification**: `qwen/qwen3.8-27b` returns strict structured output for category suggestions, evidence relevance, visible observations, uncertainty, and quality flags. Results are advisory and overridable.
+3. **Image Embeddings for Duplicate Detection**: A versioned local ConvNeXt-Base embedding provider computes 1024-dimensional vectors. Spatial, temporal, category, hash, and cosine-similarity signals retrieve candidates. Groq reviews only uncertain pairs.
+4. **Priority and Urgency**: Versioned deterministic rules compute the final 0–100 score. Groq may provide bounded advisory severity signals but cannot set final priority independently.
+5. **Resolution Verification**: Deterministic GPS, timestamp, provenance, and quality checks are combined with a structured Qwen before/after comparison. AI output alone never resolves an incident; citizen confirmation or an explicit business-rule/human decision is required.
+6. **Predictive Hotspot Analytics**: Statistical baselines are evaluated first. Prophet is introduced only if time-based backtesting materially outperforms the baseline.
+
+Every AI analysis stores provider, model, prompt version, schema version, request hash, status, latency, token usage, structured result, timestamps, and failure/refusal state. Provider failure leaves work in `PENDING` or `REVIEW_REQUIRED` and never blocks core reporting.
 
 ---
 
@@ -288,6 +301,8 @@ The FastAPI microservice implements five models:
 - Test Multipart uploads for reports.
 - Test PostgreSQL proximity and bounding-box queries.
 - Test Express REST client connection to FastAPI endpoints.
+- Test the durable job/outbox boundary and idempotent retries.
+- Test mocked Groq success, timeout, rate limit, refusal, malformed output, and provider outage.
 
 ### E2E Testing (Playwright "Golden Flow")
 - **Step 1**: Citizen submits a new pothole report with coordinates.
@@ -301,6 +316,19 @@ The FastAPI microservice implements five models:
 ---
 
 ## 10. Implementation Roadmap & Acceptance Criteria
+
+### Current Status Registry (2026-08-30)
+
+This registry supersedes historical module completion labels in older implementation notes. A module is not `VERIFIED` until it passes the Definition of Done in [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
+
+| Status | Modules |
+| :--- | :--- |
+| **IN REVIEW** | M0 — Product Truth and Governance Reset (documentation, status registry, architecture, and ADR implemented; awaiting user approval of M1) |
+| **PARTIAL / CORRECTION REQUIRED** | M1–M13 — meaningful prototype implementation exists but security, privacy, reliability, acceptance, or production gaps remain |
+| **BASELINE ONLY** | M14 — distance-only duplicate helper; M17 — partial audit writes; M18 — placeholder analytics UI |
+| **NOT STARTED** | M15 — Priority Engine; M16 — Resolution Verification; M19 — Civic Health Score; M20 — Civic Asset Registry; M21 — Predictive Intelligence |
+
+Execution order is correction-first: complete and verify M0–M13 in order, then implement M14–M21 in order. The next approval gate is M0; no M1 or M14 implementation begins automatically.
 
 ### Phase 1: Foundation (Modules M0 - M3)
 - **M0: Product Foundation**: Establish `Implementation.md` (This document).
@@ -326,28 +354,33 @@ The FastAPI microservice implements five models:
 ### Phase 4: Municipal Operations (Modules M8 - M10)
 - **M8: Admin Console**: Role-scoped dashboard queues for officials.
   - *Acceptance*: Officials see lists filtered by their assigned ward/department.
-- **M9: Department Routing**: Category-to-Department mapping tables.
-  - *Acceptance*: Incidents are routed to correct departments; ward officers can assign tasks.
-- **M10: Worker Taskboard**: Work order forms and resolution upload interface.
-  - *Acceptance*: Field workers mark tasks started and submit after-photo resolutions.
+- **M9: Department Routing**: Versioned normalized categories, scoped routing rules, deterministic precedence, explainable routing decisions, and safe assignment validation.
+  - *Implementation*: `Category`, `RoutingRule`, and `RoutingDecision` are introduced in migration `0006_department_routing`; routing preview/rule lifecycle APIs live under `/api/v1/routing`; report creation and reassignment persist decisions.
+  - *Acceptance*: Every active category has one deterministic route or explicit manual review; workers/departments outside incident scope are rejected; decisions are explainable and audited.
+- **M10: Worker Taskboard**: Persistent work orders, assignment history, validated resolution evidence, and worker queue.
+  - *Implementation*: migration `0007_field_worker_operations` adds `WorkOrder`, `AssignmentHistory`, and `ResolutionSubmission`; start/resolve endpoints enforce active ownership and preserve `RESOLUTION_SUBMITTED` for later verification.
+  - *Acceptance*: Evidence submission never directly resolves an incident; every action references one active assignment; evidence retains immutable hash, capture time, and GPS provenance.
 
 ### Phase 5: Accountability & Alerts (Modules M11 - M12, M17)
-- **M11: SLA escalation Engine**: Cron daemon scans and escalations.
-  - *Acceptance*: Expired SLA deadline updates level, assigns new officer, and marks incident public.
-- **M12: Notifications System**: Central notifications router.
-  - *Acceptance*: Multi-channel dispatching updates in-app notification center.
+- **M11: SLA escalation Engine**: Durable SLA policies/state/events with idempotent warning, Tier 1, Tier 2, and commissioner escalation.
+  - *Implementation*: migration `0008_durable_sla` adds `SlaPolicy`, `IncidentSla`, and `SlaEscalationEvent`; the API runs a restart-safe evaluator and exposes scoped policy/history endpoints.
+  - *Acceptance*: Every active incident has one explainable SLA state and each escalation tier fires once at the configured time.
+- **M12: Notifications System**: Durable preference-aware in-app delivery with idempotency and channel attempt tracking.
+  - *Implementation*: migration `0009_notification_delivery` adds notification idempotency, preferences, and delivery attempts; `/api/v1/notifications/preferences` manages user preferences. Email/SMS remain disabled until providers are configured.
+  - *Acceptance*: In-app notifications are private/durable and preferences suppress eligible delivery.
 - **M17: Audit Trail**: Cryptographic change tracker.
   - *Acceptance*: Any state change computes SHA256; verification validates integrity of history.
 
 ### Phase 6: AI Analytics (Modules M13 - M16)
-- **M13: Category Auto-Classification**: MobileNetV2 FastAPI.
-  - *Acceptance*: Post requests return suggested label with confidence score.
-- **M14: Duplication Pipeline**: Cosine similarity embedding analysis.
-  - *Acceptance*: Nearby visual duplicate tickets are clustered automatically.
+- **M13: Groq Multimodal Classification**: Provider-neutral FastAPI integration using Groq `qwen/qwen3.8-27b`, strict JSON normalization, failure-safe fallback, and provenance.
+  - *Implementation*: migration `0010_ai_analysis` stores provider/model/prompt/schema metadata; Gemini is removed from active ML dependencies.
+  - *Acceptance*: Reports persist when Groq is unavailable; every suggestion records provenance and remains overridable.
+- **M14: Duplication Pipeline**: Local 1024-dimensional embeddings, spatial/temporal candidate retrieval, cosine similarity, and Groq review for uncertain pairs.
+  - *Acceptance*: Nearby visual duplicate tickets meet approved precision/recall thresholds and every merge is explainable, reversible, and audited.
 - **M15: Priority Classifier**: NLP priority score estimator.
   - *Acceptance*: Combined risk weight returns 0-100 priority score.
-- **M16: Visual Verification**: Before/after image comparison checks.
-  - *Acceptance*: Image comparisons output structural changes and quality metrics.
+- **M16: Visual Verification**: Deterministic evidence checks plus structured Qwen before/after comparison, human review, and citizen confirmation/dispute.
+  - *Acceptance*: No incident resolves solely from AI output; the complete confirmation and reopen flows pass E2E.
 
 ### Phase 7: Civic Intelligence (Modules M18 - M21)
 - **M18: Public Analytics Scorecards**: Performance comparisons.

@@ -17,4 +17,4 @@ Replace MongoDB and Redis/BullMQ with PostgreSQL (Supabase) as the primary datab
 ## Consequences
 - The backend API will connect to PostgreSQL using a client pool (`pg` library) or Prisma ORM.
 - Local compose configuration runs PostgreSQL instead of MongoDB and Redis.
-- Background jobs (SLA scan, classification) will run as simple asynchronous processes within the API or worker shell without Redis queue gates.
+- Background jobs were initially allowed to run as simple asynchronous processes while the prototype was established. The correction-first plan identifies this as insufficient for production reliability. M1 will implement or formally approve a durable PostgreSQL job/outbox design while continuing to defer Redis/BullMQ unless scale measurements justify it.

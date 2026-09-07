@@ -1,0 +1,18 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { FiAlertCircle, FiBarChart2, FiClock, FiFileText, FiGrid, FiHome, FiLogOut, FiMap, FiPlus, FiSettings, FiUsers } from 'react-icons/fi';
+
+type User = { id: string; email: string; role: string };
+type Item = { name: string; href: string; icon: typeof FiHome };
+const operations: Item[] = [{ name: 'Dashboard', href: '/admin', icon: FiGrid }, { name: 'Reports', href: '/admin/reports', icon: FiFileText }, { name: 'Incidents', href: '/admin/incidents', icon: FiAlertCircle }, { name: 'People', href: '/admin/people', icon: FiUsers }, { name: 'Analytics', href: '/admin/analytics', icon: FiBarChart2 }, { name: 'Live map', href: '/map', icon: FiMap }];
+function navFor(role: string): Item[] { if (role === 'CITIZEN') return [{ name: 'Home', href: '/', icon: FiHome }, { name: 'Report an issue', href: '/report', icon: FiPlus }, { name: 'Explore map', href: '/map', icon: FiMap }, { name: 'My reports', href: '/profile', icon: FiFileText }]; if (role === 'FIELD_WORKER') return [{ name: 'Today\'s work', href: '/admin', icon: FiClock }, { name: 'Assigned tasks', href: '/admin/incidents', icon: FiAlertCircle }, { name: 'Work map', href: '/map', icon: FiMap }]; return operations; }
+
+export default function Sidebar({ user, onLogout }: { user: User | null; onLogout: () => void }) {
+  const pathname = usePathname();
+  if (!user) return null;
+  const items = navFor(user.role);
+  const active = (href: string) => href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
+  return <aside className="flex h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-sm" aria-label="Primary navigation"><div className="flex items-center gap-3 border-b border-sidebar-border px-5 py-5"><div className="flex size-9 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-sm"><img src="/civique.png" alt="" className="size-6 object-contain" /></div><div className="min-w-0"><p className="truncate text-base font-semibold tracking-tight">Civique</p><p className="truncate text-xs text-muted-foreground">{user.role.replaceAll('_', ' ')} portal</p></div></div><nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Workspace">{items.map(({ name, href, icon: Icon }) => <Link key={href} href={href} aria-current={active(href) ? 'page' : undefined} className={`flex min-h-10 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors ${active(href) ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm' : 'text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}`}><Icon aria-hidden="true" className="size-4 shrink-0" /><span>{name}</span></Link>)}</nav><div className="space-y-1 border-t border-sidebar-border p-3"><Link href={user.role === 'CITIZEN' ? '/profile' : '/admin/settings'} className={`flex min-h-10 items-center gap-3 rounded-md px-3 text-sm font-medium ${active(user.role === 'CITIZEN' ? '/profile' : '/admin/settings') ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}`}><FiSettings aria-hidden="true" className="size-4" /><span>Settings</span></Link><button type="button" onClick={onLogout} className="flex min-h-10 w-full items-center gap-3 rounded-md px-3 text-left text-sm font-medium text-sidebar-foreground/75 hover:bg-destructive/10 hover:text-destructive"><FiLogOut aria-hidden="true" className="size-4" /><span>Sign out</span></button></div></aside>;
+}

@@ -1,6 +1,7 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -43,56 +44,136 @@ enum PriorityLevel {
   CRITICAL
 }
 
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  RETRY_WAIT
+  DEAD_LETTER
+}
+
 model User {
-  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email                 String?   @unique
-  phoneNumber           String?   @unique @map("phone_number")
-  passwordHash          String?   @map("password_hash")
-  role                  UserRole  @default(CITIZEN)
-  cityId                String?   @db.Uuid @map("city_id")
-  zoneId                String?   @db.Uuid @map("zone_id")
-  wardId                String?   @db.Uuid @map("ward_id")
-  departmentId          String?   @db.Uuid @map("department_id")
-  active                Boolean   @default(true)
-  notificationInApp     Boolean   @default(true) @map("notification_in_app")
-  notificationEmail     Boolean   @default(true) @map("notification_email")
-  notificationSms       Boolean   @default(true) @map("notification_sms")
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email             String?  @unique
+  phoneNumber       String?  @unique @map("phone_number")
+  passwordHash      String?  @map("password_hash")
+  role              UserRole @default(CITIZEN)
+  cityId            String?  @map("city_id") @db.Uuid
+  zoneId            String?  @map("zone_id") @db.Uuid
+  wardId            String?  @map("ward_id") @db.Uuid
+  departmentId      String?  @map("department_id") @db.Uuid
+  active            Boolean  @default(true)
+  notificationInApp Boolean  @default(true) @map("notification_in_app")
+  notificationEmail Boolean  @default(true) @map("notification_email")
+  notificationSms   Boolean  @default(true) @map("notification_sms")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   // Relations
-  reports               Report[]  @relation("Submitter")
-  assignedIncidents     Incident[] @relation("AssignedTo")
-  createdIncidents      Incident[] @relation("AssignedBy")
-  resolvedIncidents     Incident[] @relation("Worker")
+  city                    City?                   @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  zone                    Zone?                   @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  ward                    Ward?                   @relation(fields: [wardId], references: [id], onDelete: SetNull)
+  reports                 Report[]                @relation("Submitter")
+  assignedIncidents       Incident[]              @relation("AssignedTo")
+  createdIncidents        Incident[]              @relation("AssignedBy")
+  resolvedIncidents       Incident[]              @relation("Worker")
+  notifications           Notification[]
+  sessions                UserSession[]
+  notificationPreferences NotificationPreference?
+  workOrders              WorkOrder[]
+  assignmentHistory       AssignmentHistory[]
+  ResolutionSubmission    ResolutionSubmission[]
 
   @@map("users")
 }
 
+model UserSession {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  tokenHash    String    @unique @map("token_hash")
+  familyId     String    @map("family_id") @db.Uuid
+  expiresAt    DateTime  @map("expires_at")
+  revokedAt    DateTime? @map("revoked_at")
+  replacedById String?   @map("replaced_by_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  lastUsedAt   DateTime? @map("last_used_at")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([familyId])
+  @@map("user_sessions")
+}
+
 model Report {
   id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  incidentId         String?   @db.Uuid @map("incident_id")
-  submitterRef       String?   @db.Uuid @map("submitter_ref")
+  incidentId         String?   @map("incident_id") @db.Uuid
+  submitterRef       String?   @map("submitter_ref") @db.Uuid
   anonymousToken     String?   @map("anonymous_token")
   photoUrl           String    @map("photo_url")
   description        String?
   voiceTranscript    String?   @map("voice_transcript")
   categorySuggested  String?   @map("category_suggested")
   categoryConfirmed  String?   @map("category_confirmed")
-  categoryConfidence Decimal?  @db.Decimal(5, 2) @map("category_confidence")
+  categoryConfidence Decimal?  @map("category_confidence") @db.Decimal(5, 2)
   latitude           Float
   longitude          Float
   captureMethod      String    @default("CAMERA_LIVE") @map("capture_method")
   deviceTimestamp    DateTime? @map("device_timestamp")
   gpsTimestamp       DateTime? @map("gps_timestamp")
   imageHash          String?   @map("image_hash")
+  citizenName        String?   @map("citizen_name")
+  citizenPhone       String?   @map("citizen_phone")
+  landmark           String?   @map("landmark")
+  severity           String?   @default("MEDIUM") @map("severity")
   createdAt          DateTime  @default(now()) @map("created_at")
+  idempotencyKey     String?   @unique @map("idempotency_key")
 
   // Relations
-  incident           Incident? @relation(fields: [incidentId], references: [id], onDelete: SetNull)
-  submitter          User?     @relation("Submitter", fields: [submitterRef], references: [id], onDelete: SetNull)
+  incident    Incident?    @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  submitter   User?        @relation("Submitter", fields: [submitterRef], references: [id], onDelete: SetNull)
+  mediaAssets MediaAsset[]
+  aiAnalyses  AiAnalysis[]
 
+  @@index([incidentId])
+  @@index([createdAt])
   @@map("reports")
+}
+
+model MediaAsset {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportId       String    @map("report_id") @db.Uuid
+  storagePath    String    @map("storage_path")
+  sha256         String
+  mimeType       String    @map("mime_type")
+  byteSize       Int       @map("byte_size")
+  width          Int?
+  height         Int?
+  isPrivate      Boolean   @default(true) @map("is_private")
+  retentionUntil DateTime? @map("retention_until")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  report         Report    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@index([sha256])
+  @@map("media_assets")
+}
+
+model AiAnalysis {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportId      String   @map("report_id") @db.Uuid
+  provider      String
+  model         String
+  promptVersion String   @map("prompt_version")
+  schemaVersion String   @map("schema_version")
+  category      String?
+  confidence    Decimal? @db.Decimal(5, 4)
+  result        Json
+  status        String   @default("PENDING")
+  createdAt     DateTime @default(now()) @map("created_at")
+  report        Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId, createdAt])
+  @@map("ai_analyses")
 }
 
 model Incident {
@@ -104,19 +185,20 @@ model Incident {
   priorityScore    Int            @default(0) @map("priority_score")
   latitude         Float
   longitude        Float
-  cityId           String?        @db.Uuid @map("city_id")
-  zoneId           String?        @db.Uuid @map("zone_id")
-  wardId           String?        @db.Uuid @map("ward_id")
-  departmentId     String?        @db.Uuid @map("department_id")
+  cityId           String?        @map("city_id") @db.Uuid
+  zoneId           String?        @map("zone_id") @db.Uuid
+  wardId           String?        @map("ward_id") @db.Uuid
+  departmentId     String?        @map("department_id") @db.Uuid
   reportCount      Int            @default(1) @map("report_count")
   beforePhotoUrls  String[]       @map("before_photo_urls")
   afterPhotoUrls   String[]       @map("after_photo_urls")
-  workerRef        String?        @db.Uuid @map("worker_ref")
+  workerRef        String?        @map("worker_ref") @db.Uuid
   resolvedNotes    String?        @map("resolved_notes")
   slaDeadline      DateTime?      @map("sla_deadline")
   slaBreached      Boolean        @default(false) @map("sla_breached")
-  assignedTo       String?        @db.Uuid @map("assigned_to")
-  assignedBy       String?        @db.Uuid @map("assigned_by")
+  isPublic         Boolean        @default(true) @map("is_public")
+  assignedTo       String?        @map("assigned_to") @db.Uuid
+  assignedBy       String?        @map("assigned_by") @db.Uuid
   assignedAt       DateTime?      @map("assigned_at")
   startedAt        DateTime?      @map("started_at")
   completedAt      DateTime?      @map("completed_at")
@@ -124,30 +206,306 @@ model Incident {
   resolvedAt       DateTime?      @map("resolved_at")
 
   // Relations
-  reports          Report[]
-  worker           User?          @relation("Worker", fields: [workerRef], references: [id])
-  assignee         User?          @relation("AssignedTo", fields: [assignedTo], references: [id])
-  creator          User?          @relation("AssignedBy", fields: [assignedBy], references: [id])
-  auditLogs        AuditLog[]
+  city                  City?                  @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  zone                  Zone?                  @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  ward                  Ward?                  @relation(fields: [wardId], references: [id], onDelete: SetNull)
+  reports               Report[]
+  worker                User?                  @relation("Worker", fields: [workerRef], references: [id])
+  assignee              User?                  @relation("AssignedTo", fields: [assignedTo], references: [id])
+  creator               User?                  @relation("AssignedBy", fields: [assignedBy], references: [id])
+  auditLogs             AuditLog[]
+  notifications         Notification[]
+  routingDecisions      RoutingDecision[]
+  workOrder             WorkOrder?
+  assignmentHistory     AssignmentHistory[]
+  resolutionSubmissions ResolutionSubmission[]
+  slaState              IncidentSla?
+  slaEvents             SlaEscalationEvent[]
 
+  @@index([status, createdAt])
+  @@index([cityId, status])
+  @@index([wardId, status])
+  @@index([departmentId, status])
   @@map("incidents")
+}
+
+model State {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  cities City[]
+
+  @@map("states")
+}
+
+enum GeographyImportStatus {
+  VALIDATING
+  ACTIVE
+  FAILED
+}
+
+model GeographyDataset {
+  id            String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  source        String
+  version       String
+  checksum      String                @unique
+  effectiveDate DateTime?             @map("effective_date")
+  status        GeographyImportStatus @default(VALIDATING)
+  importedAt    DateTime?             @map("imported_at")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  wards         Ward[]
+
+  @@unique([source, version])
+  @@map("geography_datasets")
+}
+
+model City {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique
+  stateId   String?  @map("state_id") @db.Uuid
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  state        State?        @relation(fields: [stateId], references: [id], onDelete: SetNull)
+  zones        Zone[]
+  users        User[]
+  incidents    Incident[]
+  departments  Department[]
+  routingRules RoutingRule[]
+
+  @@map("cities")
+}
+
+model Zone {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  cityId    String   @map("city_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  city      City       @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  wards     Ward[]
+  users     User[]
+  incidents Incident[]
+
+  @@unique([name, cityId])
+  @@map("zones")
+}
+
+model Ward {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String
+  zoneId         String   @map("zone_id") @db.Uuid
+  boundary       Json // GeoJSON Polygon or MultiPolygon geometry
+  sourceCode     String?  @map("source_code")
+  datasetId      String?  @map("dataset_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+  idempotencyKey String?  @unique @map("idempotency_key")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  zone         Zone              @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  dataset      GeographyDataset? @relation(fields: [datasetId], references: [id], onDelete: SetNull)
+  users        User[]
+  incidents    Incident[]
+  routingRules RoutingRule[]
+
+  @@unique([name, zoneId])
+  @@index([zoneId])
+  @@index([datasetId])
+  @@map("wards")
 }
 
 model Department {
   id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                  String
-  cityId                String?  @db.Uuid @map("city_id")
+  cityId                String?  @map("city_id") @db.Uuid
   handledCategories     String[] @map("handled_categories")
   defaultSlaHours       Int      @default(24) @map("default_sla_hours")
   warningThresholdHours Int      @default(4) @map("warning_threshold_hours")
   createdAt             DateTime @default(now()) @map("created_at")
 
+  // Relations
+  city             City?             @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  routingRules     RoutingRule[]
+  routingDecisions RoutingDecision[]
+
   @@map("departments")
+}
+
+model Category {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key          String        @unique
+  name         String
+  description  String?
+  active       Boolean       @default(true)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  routingRules RoutingRule[]
+
+  @@map("categories")
+}
+
+model RoutingRule {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  categoryId     String            @map("category_id") @db.Uuid
+  cityId         String?           @map("city_id") @db.Uuid
+  wardId         String?           @map("ward_id") @db.Uuid
+  departmentId   String            @map("department_id") @db.Uuid
+  priority       Int               @default(0)
+  effectiveFrom  DateTime          @default(now()) @map("effective_from")
+  effectiveUntil DateTime?         @map("effective_until")
+  active         Boolean           @default(true)
+  createdAt      DateTime          @default(now()) @map("created_at")
+  category       Category          @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  city           City?             @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  ward           Ward?             @relation(fields: [wardId], references: [id], onDelete: Cascade)
+  department     Department        @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  decisions      RoutingDecision[]
+
+  @@index([categoryId, cityId, wardId, active])
+  @@index([effectiveFrom, effectiveUntil])
+  @@map("routing_rules")
+}
+
+model RoutingDecision {
+  id                   String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incidentId           String       @map("incident_id") @db.Uuid
+  ruleId               String?      @map("rule_id") @db.Uuid
+  categoryKey          String       @map("category_key")
+  departmentId         String?      @map("department_id") @db.Uuid
+  previousDepartmentId String?      @map("previous_department_id") @db.Uuid
+  reason               String
+  createdAt            DateTime     @default(now()) @map("created_at")
+  incident             Incident     @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  rule                 RoutingRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  department           Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@index([incidentId, createdAt])
+  @@map("routing_decisions")
+}
+
+model WorkOrder {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incidentId  String    @unique @map("incident_id") @db.Uuid
+  workerId    String    @map("worker_id") @db.Uuid
+  assignedAt  DateTime  @default(now()) @map("assigned_at")
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  status      String    @default("ASSIGNED")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  incident    Incident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  worker      User      @relation(fields: [workerId], references: [id], onDelete: Restrict)
+
+  @@index([workerId, status])
+  @@map("work_orders")
+}
+
+model AssignmentHistory {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incidentId   String   @map("incident_id") @db.Uuid
+  workerId     String?  @map("worker_id") @db.Uuid
+  departmentId String?  @map("department_id") @db.Uuid
+  action       String
+  reason       String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  incident     Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  worker       User?    @relation(fields: [workerId], references: [id], onDelete: SetNull)
+
+  @@index([incidentId, createdAt])
+  @@map("assignment_history")
+}
+
+model ResolutionSubmission {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incidentId         String   @map("incident_id") @db.Uuid
+  workerId           String   @map("worker_id") @db.Uuid
+  evidencePath       String   @map("evidence_path")
+  evidenceSha256     String   @map("evidence_sha256")
+  notes              String
+  captureAt          DateTime @map("capture_at")
+  latitude           Float?
+  longitude          Float?
+  submittedAt        DateTime @default(now()) @map("submitted_at")
+  verificationStatus String   @default("PENDING") @map("verification_status")
+  incident           Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  worker             User     @relation(fields: [workerId], references: [id], onDelete: Restrict)
+
+  @@unique([incidentId, evidenceSha256])
+  @@index([incidentId, submittedAt])
+  @@map("resolution_submissions")
+}
+
+model SlaPolicy {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String
+  cityId            String?       @map("city_id") @db.Uuid
+  version           Int           @default(1)
+  timezone          String        @default("Asia/Kolkata")
+  warningHours      Int           @default(4) @map("warning_hours")
+  tier1Hours        Int           @default(24) @map("tier1_hours")
+  tier2Hours        Int           @default(48) @map("tier2_hours")
+  commissionerHours Int           @default(72) @map("commissioner_hours")
+  workingCalendar   Json?         @map("working_calendar")
+  active            Boolean       @default(true)
+  effectiveFrom     DateTime      @default(now()) @map("effective_from")
+  effectiveUntil    DateTime?     @map("effective_until")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  incidentStates    IncidentSla[]
+
+  @@unique([cityId, version])
+  @@index([cityId, active, effectiveFrom])
+  @@map("sla_policies")
+}
+
+model IncidentSla {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incidentId      String               @unique @map("incident_id") @db.Uuid
+  policyId        String               @map("policy_id") @db.Uuid
+  state           String               @default("ACTIVE")
+  startedAt       DateTime             @default(now()) @map("started_at")
+  deadlineAt      DateTime             @map("deadline_at")
+  pausedAt        DateTime?            @map("paused_at")
+  pausedReason    String?              @map("paused_reason")
+  currentTier     Int                  @default(0) @map("current_tier")
+  lastEvaluatedAt DateTime?            @map("last_evaluated_at")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+  incident        Incident             @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  policy          SlaPolicy            @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  events          SlaEscalationEvent[]
+
+  @@index([state, deadlineAt])
+  @@map("incident_sla")
+}
+
+model SlaEscalationEvent {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incidentId    String      @map("incident_id") @db.Uuid
+  incidentSlaId String      @map("incident_sla_id") @db.Uuid
+  tier          Int
+  eventType     String      @map("event_type")
+  firedAt       DateTime    @default(now()) @map("fired_at")
+  targetUserId  String?     @map("target_user_id") @db.Uuid
+  metadata      Json?
+  incident      Incident    @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  incidentSla   IncidentSla @relation(fields: [incidentSlaId], references: [id], onDelete: Cascade)
+
+  @@unique([incidentId, tier])
+  @@index([incidentSlaId, tier])
+  @@map("sla_escalation_events")
 }
 
 model AuditLog {
   id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  incidentId   String   @db.Uuid @map("incident_id")
+  incidentId   String   @map("incident_id") @db.Uuid
   eventType    String   @map("event_type")
   actor        String
   previousHash String?  @map("previous_hash")
@@ -156,7 +514,89 @@ model AuditLog {
   timestamp    DateTime @default(now())
 
   // Relations
-  incident     Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
   @@map("audit_logs")
+}
+
+model Notification {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  title      String
+  message    String
+  type       String // e.g. "INCIDENT_ASSIGNED", "INCIDENT_STATUS_CHANGED", "SLA_BREACH", "RESOLUTION_SUBMITTED"
+  incidentId String?  @map("incident_id") @db.Uuid
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  incident         Incident?         @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  deliveryAttempts DeliveryAttempt[]
+
+  @@index([userId, read, createdAt])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @unique @map("user_id") @db.Uuid
+  inApp     Boolean  @default(true)
+  email     Boolean  @default(false)
+  sms       Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model DeliveryAttempt {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  notificationId String       @map("notification_id") @db.Uuid
+  channel        String
+  status         String       @default("QUEUED")
+  attemptCount   Int          @default(0) @map("attempt_count")
+  lastError      String?      @map("last_error")
+  sentAt         DateTime?    @map("sent_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, channel])
+  @@map("delivery_attempts")
+}
+
+model Job {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type           String
+  payload        Json
+  status         JobStatus @default(QUEUED)
+  idempotencyKey String?   @unique @map("idempotency_key")
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(5) @map("max_attempts")
+  availableAt    DateTime  @default(now()) @map("available_at")
+  lockedAt       DateTime? @map("locked_at")
+  lockedBy       String?   @map("locked_by")
+  lastError      String?   @map("last_error")
+  completedAt    DateTime? @map("completed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([status, availableAt])
+  @@index([lockedAt])
+  @@map("jobs")
+}
+
+model OutboxEvent {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  topic          String
+  payload        Json
+  idempotencyKey String?   @unique @map("idempotency_key")
+  publishedAt    DateTime? @map("published_at")
+  attempts       Int       @default(0)
+  lastError      String?   @map("last_error")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([publishedAt, createdAt])
+  @@map("outbox_events")
 }
