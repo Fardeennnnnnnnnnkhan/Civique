@@ -1,6 +1,17 @@
 # Civique
 
-**Civique** is an AI-powered civic issue reporting, verification, and resolution platform designed to establish a transparent, auditable, and automated loop from citizen report to verified resolution.
+**Civique** is an AI-assisted civic issue reporting, municipal operations, transparency, and public-participation platform. It is being developed as an Indore-first, IMC-ready pilot and must not be represented as an official Indore Municipal Corporation service without formal authorization.
+
+## Project Documentation
+
+- [`Implementation.md`](Implementation.md) is the sole authoritative product, architecture, security, UX, and module specification.
+- [`docs/ACCEPTANCE_MATRIX.md`](docs/ACCEPTANCE_MATRIX.md) records current module status and verification evidence.
+- [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md) records durable current engineering context.
+- [`docs/TASK_STATUS.md`](docs/TASK_STATUS.md) records the active module and immediate gate.
+- [`docs/runbooks/M1_INFRASTRUCTURE.md`](docs/runbooks/M1_INFRASTRUCTURE.md) covers local startup, readiness, migrations, durable jobs, and backup/restore rehearsal.
+- [`docs/runbooks/M2_IDENTITY.md`](docs/runbooks/M2_IDENTITY.md) covers identity, sessions, CSRF, MFA, and the repeatable overall verification checklist.
+
+Historical completion labels elsewhere do not override the acceptance matrix.
 
 ---
 
@@ -32,15 +43,27 @@ If you prefer running a local PostgreSQL instance:
 docker compose up -d
 ```
 
-### Push Database Schema
-Push the models to your active database instance using Prisma:
+### Apply Database Migrations
+
+Use only an approved local/disposable database. Do not run schema commands against staging or production without explicit permission and a rehearsed migration plan.
+
 ```bash
-npx prisma db push --schema=services/api/prisma/schema.prisma
+npm run prisma:migrate --workspace=services/api
 ```
 
 ---
 
 ## 3. Running the Services
+
+Start PostgreSQL, API, web, worker, and ML together:
+
+```bash
+npm run dev
+```
+
+Set `SKIP_DOCKER=true` only when PostgreSQL is already running. The orchestrator stops the remaining child processes if one service exits unexpectedly.
+
+For individual service debugging, use separate terminal sessions:
 
 Open separate terminal sessions from the project root and run:
 
@@ -84,4 +107,18 @@ Ensure everything is running successfully by querying the service health endpoin
   curl http://localhost:8000/health
   ```
 
+Run the full stack readiness check with:
 
+```bash
+npm run health:check
+```
+
+Run the overall local quality gate after each module with:
+
+```bash
+npm run verify:overall
+```
+
+This includes tests, strict typechecks, lint, and production builds; it will stop at the known web lint backlog until that gate is cleared.
+
+Never commit `.env` files. If a credential is exposed in a terminal transcript or shared artifact, rotate it with the provider and update every local service copy.

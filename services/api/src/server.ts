@@ -16,10 +16,25 @@ async function startServer() {
 
     // Force ts-node-dev reload to pick up connection_limit env variable
     server.listen(PORT, () => {
-      console.log(`Civique API and WebSocket Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode.`);
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        service: 'api',
+        module: 'server',
+        operation: 'startup',
+        status: 'STARTED',
+        port: Number(PORT),
+        environment: process.env.NODE_ENV || 'development',
+      }));
     });
   } catch (error) {
-    console.error('Server startup failed:', error);
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      service: 'api',
+      module: 'server',
+      operation: 'startup',
+      status: 'ERROR',
+      errorType: error instanceof Error ? error.name : 'UnknownError',
+    }));
     process.exit(1);
   }
 }

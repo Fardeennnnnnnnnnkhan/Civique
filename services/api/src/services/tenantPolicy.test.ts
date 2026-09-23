@@ -1,0 +1,3 @@
+import assert from 'node:assert/strict';
+import { boundedRollout, canAccessTenant, validTenantSlug } from './tenantPolicy';
+assert.equal(validTenantSlug('indore'), true); assert.equal(validTenantSlug('Indore City'), false); assert.equal(boundedRollout(true, 140), 100); assert.equal(boundedRollout(false, -5), 0); assert.equal(canAccessTenant({ role: 'CITY_ADMIN', cityId: 'a' }, 'a'), true); assert.equal(canAccessTenant({ role: 'CITY_ADMIN', cityId: 'a' }, 'b'), false); assert.equal(canAccessTenant({ role: 'SUPER_ADMIN', cityId: null }, 'b'), true); console.log('Tenant slug, rollout, and isolation policy tests passed.');

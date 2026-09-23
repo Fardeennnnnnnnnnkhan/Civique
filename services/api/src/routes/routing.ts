@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { Prisma, UserRole } from '@prisma/client';
 import { prisma } from '../db';
 import { AuthenticatedRequest, authenticateJWT, requireRole } from '../middleware/auth';
-import { previewRouting, SUPPORTED_CATEGORIES, normalizeCategory } from '../services/routing';
+import { previewRouting, SUPPORTED_CATEGORIES, normalizeCategory, routingScopeError } from '../services/routing';
 
 const router = Router();
 const admins = [UserRole.WARD_OFFICER, UserRole.DEPARTMENT_HEAD, UserRole.ZONAL_OFFICER, UserRole.COMMISSIONER, UserRole.CITY_ADMIN, UserRole.SUPER_ADMIN];
@@ -33,6 +33,7 @@ router.post('/rules', authenticateJWT, requireRole([UserRole.CITY_ADMIN, UserRol
   const department = await prisma.department.findUnique({ where: { id: departmentId } });
   if (!department) return res.status(400).json({ success: false, error: { code: 'DEPARTMENT_NOT_FOUND', message: 'Department not found.' } });
   if (actor?.role !== UserRole.SUPER_ADMIN && actor?.cityId && department.cityId !== actor.cityId) return res.status(403).json({ success: false, error: { code: 'OUT_OF_SCOPE', message: 'Department is outside your city scope.' } });
+  if (typeof cityId === 'string' && routingScopeError({ cityId, departmentCityId: department.cityId, ruleCityId: cityId })) return res.status(403).json({ success: false, error: { code: 'OUT_OF_SCOPE', message: 'Routing rule and department must belong to the selected city.' } });
   const key = normalizeCategory(category);
   const cat = await (prisma as any).category.upsert({ where: { key }, update: { active: true }, create: { key, name: key.replace(/_/g, ' ') } });
   const rule = await (prisma as any).routingRule.create({ data: { categoryId: cat.id, cityId: typeof cityId === 'string' ? cityId : department.cityId, wardId: typeof wardId === 'string' ? wardId : null, departmentId, priority: Number(priority) || 0, effectiveFrom: effectiveFrom ? new Date(String(effectiveFrom)) : new Date(), effectiveUntil: effectiveUntil ? new Date(String(effectiveUntil)) : null } });

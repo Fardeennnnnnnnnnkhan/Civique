@@ -3,227 +3,140 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { 
-  FiHome, 
-  FiMap, 
-  FiPlusCircle, 
-  FiUser, 
-  FiBell, 
-  FiMapPin, 
-  FiLogOut, 
-  FiActivity,
-  FiSettings,
-  FiChevronDown
+import {
+  FiHome,
+  FiMap,
+  FiPlusCircle,
+  FiUser,
+  FiMapPin,
+  FiLogOut,
+  FiChevronDown,
 } from 'react-icons/fi';
+import { apiFetch, logout } from '../../lib/api/client';
+import { CiviqueLogo } from '../../components/CiviqueLogo';
+import NotificationBell from './NotificationBell';
 
 export default function CitizenHeader() {
   const pathname = usePathname();
   const router = useRouter();
-  
-  const [user, setUser] = useState<{ email: string; role: string } | null>(null);
+
+  const [user, setUser] = useState<{ id?: string; email: string; role: string } | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (e) {
-        localStorage.clear();
-      }
-    }
+    apiFetch<{ user: { id: string; email: string; role: string } }>('/auth/me')
+      .then(({ user: currentUser }) => setUser(currentUser))
+      .catch(() => setUser(null));
   }, []);
 
-  const handleLogout = () => {
-    localStorage.clear();
+  const handleLogout = async () => {
+    await logout().catch(() => undefined);
     setUser(null);
     router.push('/signin');
   };
 
   const navItems = [
     { name: 'Home', href: '/', icon: FiHome },
-    { name: 'Explore', href: '/map', icon: FiMap },
-    { name: 'Report', href: '/report', icon: FiPlusCircle },
-    { name: 'My Reports', href: '/profile', icon: FiUser },
-  ];
-
-  const mockNotifications = [
-    { id: 1, title: 'Case Resolved', desc: 'Streetlight resolved in Ward 44.', time: '10m ago' },
-    { id: 2, title: 'Crew Dispatched', desc: 'DPW Unit 4 en route for Pothole #980869.', time: '2h ago' },
+    { name: 'Live Map', href: '/map', icon: FiMap },
+    { name: 'Report Issue', href: '/report', icon: FiPlusCircle },
+    { name: 'My Grievances', href: '/profile', icon: FiUser },
   ];
 
   return (
-    <>
-      {/* DESKTOP GLOBAL HEADER */}
-      <header className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-[#E9E1D8] px-8 py-3.5 flex items-center justify-between z-50 select-none shadow-xs">
-        
-        {/* Left: Brand logo */}
-        <div className="flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-8.5 h-8.5 rounded-xl bg-[#5E1801] flex items-center justify-center shadow-md shrink-0 group-hover:scale-105 transition-transform">
-              <img src="/civique.png" alt="Civique Logo" className="w-5.5 h-5.5 object-contain invert" />
-            </div>
-            <div className="text-left">
-              <span className="font-display font-semibold tracking-wide text-xs text-[#5E1801]">CIVIQUE</span>
-              <p className="text-[8px] text-[#9B9088] tracking-widest font-bold">CIVIC INTELLIGENCE</p>
-            </div>
-          </Link>
-        </div>
+    <header className="sticky top-0 bg-white border-b border-[#eef1ea] px-6 md:px-8 py-3.5 flex items-center justify-between z-50 select-none">
+      {/* Left: Brand Logo */}
+      <div className="flex items-center gap-6">
+        <Link href="/" className="flex items-center">
+          <CiviqueLogo size={32} />
+        </Link>
+      </div>
 
-        {/* Center: Navigation Links */}
-        <nav className="hidden md:flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[#6F625C]">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`relative px-4 py-2 rounded-xl transition-all duration-200 ${
-                  isActive 
-                    ? 'text-[#5E1801] font-bold bg-[#f2ddbb]/40' 
-                    : 'hover:text-[#5E1801] hover:bg-[#faf9f6]'
-                }`}
-              >
-                <span>{item.name}</span>
-                {isActive && (
-                  <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-[#5E1801]"></span>
-                )}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Right: Notification dropdown + User profile */}
-        <div className="flex items-center gap-4 text-xs font-medium">
-          
-          {/* Location Indicator context */}
-          <div className="hidden lg:flex items-center gap-1.5 bg-[#faf9f6] border border-[#E9E1D8] rounded-full px-3.5 py-1.5 text-[10px] text-[#6F625C] font-semibold">
-            <FiMapPin className="text-[#5E1801] animate-bounce" />
-            <span>Indore, Ward 44</span>
-          </div>
-
-          {user ? (
-            <div className="flex items-center gap-3 relative">
-              
-              {/* Notification icon */}
-              <div className="relative">
-                <button 
-                  onClick={() => setNotificationsOpen(!notificationsOpen)}
-                  className="p-2 border border-[#E9E1D8] text-[#5E1801] rounded-xl hover:bg-[#faf9f6] transition-colors relative"
-                >
-                  <FiBell className="text-base" />
-                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#EF6820] border-2 border-white"></span>
-                </button>
-
-                {/* Notifications Popup */}
-                {notificationsOpen && (
-                  <div className="absolute right-0 mt-2.5 w-68 bg-white border border-[#E9E1D8] rounded-2xl p-4 shadow-xl z-50 space-y-3.5 text-left animate-fade-in">
-                    <div className="border-b border-[#E9E1D8] pb-2 flex justify-between items-center">
-                      <span className="text-[10px] text-[#9B9088] uppercase tracking-wider font-semibold">Recent Alerts</span>
-                      <button onClick={() => setNotificationsOpen(false)} className="text-[9px] text-[#5E1801] hover:underline">Clear</button>
-                    </div>
-                    <div className="space-y-3">
-                      {mockNotifications.map((notif) => (
-                        <div key={notif.id} className="text-xs font-light space-y-0.5">
-                          <div className="flex justify-between font-semibold text-[#351008]">
-                            <span>{notif.title}</span>
-                            <span className="text-[9px] text-[#9B9088] font-normal">{notif.time}</span>
-                          </div>
-                          <p className="text-[10px] text-[#6F625C] leading-normal">{notif.desc}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Profile drop trigger */}
-              <div className="relative">
-                <button 
-                  onClick={() => setDropdownOpen(!dropdownOpen)}
-                  className="flex items-center gap-1.5 p-1 border border-[#E9E1D8] rounded-xl hover:bg-[#faf9f6] transition-colors pr-2"
-                >
-                  <div className="w-7.5 h-7.5 bg-[#f2ddbb]/60 text-[#5E1801] rounded-lg flex items-center justify-center font-bold text-xs">
-                    {user.email.substring(0, 2).toUpperCase()}
-                  </div>
-                  <FiChevronDown className="text-stone-500" />
-                </button>
-
-                {/* Dropdown Menu */}
-                {dropdownOpen && (
-                  <div className="absolute right-0 mt-2.5 w-48 bg-white border border-[#E9E1D8] rounded-2xl p-2 shadow-xl z-50 space-y-1 text-left animate-fade-in">
-                    <Link
-                      href="/profile"
-                      onClick={() => setDropdownOpen(false)}
-                      className="flex items-center gap-2 px-3 py-2 hover:bg-[#faf9f6] text-[#351008] text-xs font-medium rounded-xl transition-all"
-                    >
-                      <FiUser /> Profile Activity
-                    </Link>
-                    <Link
-                      href="/profile"
-                      onClick={() => setDropdownOpen(false)}
-                      className="flex items-center gap-2 px-3 py-2 hover:bg-[#faf9f6] text-[#351008] text-xs font-medium rounded-xl transition-all"
-                    >
-                      <FiSettings /> Settings
-                    </Link>
-                    <button
-                      onClick={handleLogout}
-                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-red-50 text-[#ba1a1a] text-xs font-semibold rounded-xl transition-all text-left border-t border-[#faf9f6] mt-1 pt-2"
-                    >
-                      <FiLogOut /> Log Out
-                    </button>
-                  </div>
-                )}
-              </div>
-
-            </div>
-          ) : (
-            <div className="flex items-center gap-4">
-              <Link href="/signin" className="text-xs font-semibold text-[#6F625C] hover:text-[#5E1801] transition-colors">
-                Sign In
-              </Link>
-              <Link href="/signup" className="premium-btn-primary px-4 py-2 text-[10px] uppercase tracking-wider font-semibold">
-                Sign Up
-              </Link>
-            </div>
-          )}
-
-        </div>
-      </header>
-
-      {/* MOBILE BOTTOM NAVIGATION BAR */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-[#E9E1D8] px-6 py-2 flex items-center justify-between z-40 shadow-lg select-none">
+      {/* Center: Navigation Links */}
+      <nav className="hidden md:flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-[#475569]">
         {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
-          const Icon = item.icon;
-          
-          if (item.name === 'Report') {
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className="relative -top-4 w-12.5 h-12.5 bg-[#5E1801] hover:bg-[#351008] text-white rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-105 active:scale-95"
-              >
-                <Icon className="text-xl" />
-              </Link>
-            );
-          }
-
           return (
             <Link
               key={item.name}
               href={item.href}
-              className={`flex flex-col items-center gap-1 p-2 text-stone-500 hover:text-[#5E1801] transition-colors ${
-                isActive ? 'text-[#5E1801]' : 'text-stone-400'
+              className={`relative px-4 py-2 rounded-xl transition-all ${
+                isActive
+                  ? 'text-[#143527] font-bold bg-[#f2f7f4]'
+                  : 'hover:text-[#143527] hover:bg-[#f8fafc]'
               }`}
             >
-              <Icon className="text-lg" />
-              <span className="text-[8px] font-semibold uppercase tracking-wider">{item.name}</span>
+              <span>{item.name}</span>
+              {isActive && (
+                <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-[#143527]" />
+              )}
             </Link>
           );
         })}
+      </nav>
+
+      {/* Right: Auth Controls & Profile */}
+      <div className="flex items-center gap-3">
+        {user ? (
+          <div className="flex items-center gap-3">
+            {user.id && <NotificationBell userId={user.id} />}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setDropdownOpen((prev) => !prev)}
+                className="flex items-center gap-2 rounded-xl border border-[#e2e8f0] bg-white p-1.5 pr-3 hover:bg-[#f1f5f9] transition-colors cursor-pointer"
+              >
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#334155] text-xs font-bold text-white">
+                  {user.email.slice(0, 2).toUpperCase()}
+                </div>
+                <span className="hidden sm:block text-xs font-bold text-[#0f172a] max-w-[120px] truncate">
+                  {user.email.split('@')[0]}
+                </span>
+                <FiChevronDown className="text-xs text-[#64748b]" />
+              </button>
+
+              {dropdownOpen && (
+                <div className="absolute right-0 mt-2 w-52 rounded-2xl border border-[#e2e8f0] bg-white p-2 text-xs shadow-xl z-50 animate-in fade-in zoom-in-95">
+                  <div className="p-2.5 border-b border-[#f1f5f9]">
+                    <p className="font-bold text-[#0f172a] truncate">{user.email}</p>
+                    <p className="text-[10px] font-semibold text-[#64748b] uppercase tracking-wider mt-0.5">
+                      {user.role.replaceAll('_', ' ')}
+                    </p>
+                  </div>
+                  <Link
+                    href="/profile"
+                    onClick={() => setDropdownOpen(false)}
+                    className="flex items-center gap-2 rounded-xl p-2.5 hover:bg-[#f1f5f9] text-[#0f172a] font-medium transition-colors"
+                  >
+                    <FiUser className="text-sm text-[#64748b]" /> My Profile & Reports
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="flex w-full items-center gap-2 rounded-xl p-2.5 text-left text-[#ef4444] hover:bg-[#fef2f2] font-medium transition-colors cursor-pointer"
+                  >
+                    <FiLogOut className="text-sm" /> Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2.5">
+            <Link
+              href="/signin"
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-[#e2e8f0] bg-white px-3.5 text-xs font-semibold text-[#0f172a] hover:bg-[#f1f5f9] transition-all"
+            >
+              Sign In
+            </Link>
+            <Link
+              href="/signup"
+              className="inline-flex h-9 items-center justify-center rounded-xl bg-[#143527] px-4 text-xs font-bold text-white shadow-xs hover:bg-[#0e271c] transition-all active:scale-98"
+            >
+              Create Account
+            </Link>
+          </div>
+        )}
       </div>
-    </>
+    </header>
   );
 }

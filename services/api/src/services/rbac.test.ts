@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { UserRole } from '@prisma/client';
+import { hasPermission, isActiveWindow, PERMISSIONS, permissionCatalog } from './rbac';
+assert.equal(hasPermission(UserRole.CITIZEN, PERMISSIONS.PEOPLE_READ), false);
+assert.equal(hasPermission(UserRole.CITY_ADMIN, PERMISSIONS.PEOPLE_STATUS), true);
+assert.equal(hasPermission(UserRole.CITY_ADMIN, PERMISSIONS.ROLES_MANAGE), false);
+assert.equal(hasPermission(UserRole.SUPER_ADMIN, PERMISSIONS.ROLES_MANAGE), true);
+assert.equal(permissionCatalog().length, Object.keys(PERMISSIONS).length);
+assert.equal(isActiveWindow(new Date('2026-01-01'), new Date('2027-01-01'), new Date('2026-06-01')), true);
+assert.equal(isActiveWindow(new Date('2025-01-01'), new Date('2026-01-01'), new Date('2026-06-01')), false);
+console.log('RBAC permission policy tests passed.');

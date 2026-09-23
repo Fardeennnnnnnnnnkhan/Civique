@@ -1,389 +1,255 @@
 # Project Context: Civique
 
-This document serves as the persistent engineering memory for **Civique**.
+This file is Civique's durable engineering memory. Product requirements and module definitions belong in [`../Implementation.md`](../Implementation.md); status evidence belongs in [`ACCEPTANCE_MATRIX.md`](ACCEPTANCE_MATRIX.md).
 
 ## Current Project Status
-- **Current Phase**: Correction-first implementation
-- **Current Module**: M13 — Groq Qwen Multimodal Classification (implemented; acceptance testing required)
-- **Authoritative Plan**: [`docs/IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md)
-- **UI Transformation Program**: UX0 — Design Foundation and Safety Baseline (plan complete; implementation not started)
-- **UI Plan**: [`docs/UI_IMPLEMENTATION_PLAN.md`](UI_IMPLEMENTATION_PLAN.md)
-- **Verified Complete Modules**: None under the new Definition of Done.
-- **Prototype Implementation Present**:
-  - M1–M13 contain meaningful implementation and form a partial operational vertical slice.
-  - These modules must be corrected and accepted individually before Civique advances to M14.
-- **In-Progress Work**:
-  - Completing M7 socket authorization, room isolation, and reconnect acceptance tests.
-  - Completing M12 notification delivery tests and M13 Groq contract/canary tests.
-  - UI implementation is reverted to the pre-UX0 state per user request; UX0 plan remains available.
-- **Pending Corrections**:
-  - Remaining M2 invitation/recovery and web migration, M4 image normalization/signed delivery, M5 citizen confirmation/dispute, M6 admin detail DTO, M7 event backfill, then M8–M13.
-- **Pending New Modules**:
-  - M14–M21 after the corrected foundation is accepted.
+
+- **Phase:** P0 — Correct and Accept the Existing Foundation.
+- **Current module:** M25 — Multi-City Control Plane.
+- **Authoritative specification:** `Implementation.md`.
+- **Current status authority:** `docs/ACCEPTANCE_MATRIX.md`.
+- **Current implementation truth:** M0 is `VERIFIED`; substantial M1–M13 and UX implementation exists, but each feature module remains `PARTIAL` under the production Definition of Done.
+- **Operating model:** Indore-first, IMC-ready pilot; not an official IMC service until formally authorized.
+
+## Completed Modules
+
+- M0 Product Governance is `VERIFIED`; the user accepted the reconciled specification and execution was authorized on 2026-09-20.
+
+## In-Progress Work
+
+- M20 civic asset registry implementation and acceptance.
+- M19 civic health implementation and acceptance remains a carry-forward gate.
+- M18 public accountability implementation and acceptance remains a carry-forward gate.
+- M17 verifiable audit and transparency timeline remains a carry-forward gate.
+- M16 resolution verification and citizen decision correction and acceptance remains a carry-forward gate.
+- M15 priority engine remains a carry-forward acceptance gate.
+- M14 duplicate intelligence remains a carry-forward acceptance gate.
+- M13 AI intake intelligence remains a carry-forward acceptance gate.
+- M12 notification delivery remains a carry-forward acceptance gate.
+- M11 SLA and escalation remains a carry-forward acceptance gate.
+- M9 department routing remains a carry-forward acceptance gate.
+- M10 field-worker operations slice: mobile taskboard, guarded start action, SLA context, and resolution handoff at `/admin/worker`.
+- M8 workforce administration and RBAC remains a carry-forward acceptance gate.
+- M7 durable realtime event acceptance remains a carry-forward gate.
+- M6 public map/privacy correction remains a carry-forward acceptance gate.
+- M2/M3 database-backed acceptance remains a carry-forward gate until migrations `0018` and `0019` are applied.
+- Preserve all existing uncommitted application work while the P0 acceptance sweep proceeds.
+- Close the existing web lint backlog, then run deterministic CI and the remaining database drills.
+
+## Pending Modules
+
+- P0: M1–M13 correction and acceptance.
+- P1: M14–M17 trust loop.
+- P2: M18–M21 accountability and civic intelligence.
+- P3: M22–M23 Civique Socio.
+- P4: M24–M25 interoperability and multi-city expansion.
 
 ## Architecture Summary
-Civique is a full-stack GovTech platform featuring:
-- **Next.js PWA** frontend using Tailwind CSS.
-- **Express.js API** backend using TypeScript and Node.js.
-- **FastAPI** service for deep-learning components.
-- **PostgreSQL (Supabase)** database with Prisma ORM.
-- **Planned AI Provider**: Groq using `qwen/qwen3.8-27b` through a provider-neutral FastAPI boundary.
-- **Background Execution**: Durable PostgreSQL job/outbox worker with leases, retries, backoff, idempotency, and dead-letter state.
+
+- Next.js responsive PWA for public, citizen, field-worker, official, administrator, accountability, and future Socio experiences.
+- Express TypeScript API for authentication, scoped authorization, validation, state transitions, routing, policies, signed media, and transactions.
+- PostgreSQL/Supabase with Prisma as the system of record.
+- Durable PostgreSQL jobs and transactional outbox with a TypeScript worker.
+- FastAPI provider-neutral AI gateway with Groq Qwen 3.8 currently configured as a replaceable preview model.
+- Private object storage for originals and normalized evidence; public clients receive only authorized redacted projections.
+- Socket.IO provides low-latency hints backed by durable sequenced events and cursor reconciliation.
+- Realtime sockets allow only validated, backend-authorized rooms; public clients reconcile event IDs and sequence gaps from the durable `/incidents/public/events` cursor API after reconnects.
+- API readiness treats database, schema, queue, and required storage failures as blocking; worker and AI outages are degraded so durable Report intake remains available.
+- Worker jobs use owner-bound leases, heartbeat renewal, bounded exponential retry, dead-letter state, and graceful drain.
+- Official accounts can enroll encrypted TOTP secrets; login uses a five-minute signed MFA challenge before issuing normal sessions.
+- Browser-cookie refresh/logout operations use a double-submit CSRF token; bearer-token API calls remain compatible.
+- Security events are append-only application records with request, user-agent, and bounded IP context; secrets and tokens are never stored in event metadata.
 
 ## Technology Stack
-- **Languages**: TypeScript, Python
-- **Database**: PostgreSQL (Supabase)
-- **ORM**: Prisma ORM
-- **Frontend Design Direction**: Tailwind CSS 4, shadcn/ui primitives, and the exact TweakCN Cloudflare theme `cmqx9le2j000504l49jgxe1d0`.
 
-## Frontend Decisions
-- Redesign Civique incrementally through UX0–UX10 while preserving URLs, API contracts, RBAC, uploads, maps, and real-time behavior.
-- Adopt the supplied Cloudflare theme tokens exactly for base surfaces, brand color, typography, radius, and shadows; extend them only with accessible civic lifecycle and priority semantics.
-- Use Inter for UI typography and Fira Code for identifiers/technical data, preferably self-hosted through deterministic local font assets.
-- Establish shadcn primitives in `components/ui` and Civique domain components separately; stop adding page-level hard-coded theme colors after UX0.
-- Do not delete the legacy theme or components until every consumer has migrated and passed visual, accessibility, and workflow tests.
+- TypeScript, Python.
+- Next.js 16, React 19, Tailwind CSS 4.
+- Express, Prisma, PostgreSQL/Supabase.
+- FastAPI, Groq provider adapter.
+- Socket.IO and durable PostgreSQL worker/outbox.
+- Leaflet for current map rendering.
 
 ## Database Decisions
-- **Spatial Boundaries**: Storing 85 Indore ward administrative boundaries in a `Json` column on `Ward` table using standard GeoJSON `MultiPolygon` structure.
-- **State Relation**: Introduced a `State` table representing states (e.g. Madhya Pradesh) and linked to `City` via foreign key relationship.
-- **Geofencing Engine**: Built a coordinate-to-boundary resolution utility implementing a Ray-Casting algorithm in TypeScript, natively supporting both GeoJSON `Polygon` and `MultiPolygon` structures.
 
-## Security Decisions
-- Backend-enforced RBAC (Role-Based Access Control) supporting 8 distinct roles.
-- `CITIZEN` is a full platform role: public registration always creates this role. `FIELD_WORKER`, `WARD_OFFICER`, `DEPARTMENT_HEAD`, `ZONAL_OFFICER`, `COMMISSIONER`, `CITY_ADMIN`, and `SUPER_ADMIN` are privileged roles provisioned by authorized workflows.
-- Citizen submission allows anonymous tracking codes.
-- Public registration must create only `CITIZEN`; privileged roles require an authorized invitation/admin workflow.
-- Public API contracts must use explicit redacted DTOs and never expose raw Report records.
-- AI is advisory and cannot independently merge, prioritize, or resolve incidents.
+- Report and Incident remain separate.
+- Evidence originals are private, immutable by policy, content-hashed, and separated from normalized/redacted derivatives.
+- Critical mutations write domain state, audit, outbox, and jobs atomically.
+- Schema evolution is additive with expand/migrate/contract for destructive changes.
+- Existing `User.role` remains a compatibility field until protected/custom role assignments and scope grants pass dual-policy parity.
+- Indore is the first city tenant; city scope must be present in all tenant-sensitive records and queries.
+
+## API Decisions
+
+- Base path remains `/api/v1`.
+- Public, owner, worker, official, administrator, and forensic DTOs are explicit and allow-listed.
+- Retryable commands use idempotency keys; conflicting administration uses entity versions or ETags.
+- Timeline/feed APIs use cursor pagination; admin directories may use bounded page pagination.
+- Socket events never replace authoritative API reconciliation.
+
+## Frontend Decisions
+
+- Standardized on pure white (`#ffffff` / `bg-white`) universal background and Deep Forest Green (`#143527`) primary brand color across the entire platform.
+- Clean neutral borders (`#eef1ea` / `border-slate-200`) and high-contrast typography replacing conflicting green tones and off-white/pale tints.
+- Existing URLs remain compatible during migration.
+- Citizen and field-worker experiences are mobile-first; official/admin experiences are desktop-efficient and responsive.
+- Shared primitives live in `components/ui`; civic domain components live in feature/domain folders.
+- No new page-local theme literals or mock controls presented as functional.
+- The next bounded UI slice is the M10/UX8 field-worker mobile workflow.
 
 ## AI Decisions
-- Gemini is no longer the selected provider.
-- The selected multimodal model is Groq `qwen/qwen3.8-27b`.
-- Groq analysis must use strict structured output, versioned provenance, queued retry, failure-safe fallback, and human override.
-- Local deterministic preprocessing and 1024-dimensional embeddings remain required for media safety and scalable duplicate candidate retrieval.
+
+- AI is advisory and cannot independently merge, prioritize, assign, or resolve.
+- Groq `qwen/qwen3.8-27b` is configurable, preview, and replaceable through a model registry.
+- AI failure never blocks durable Report submission.
+- Every analysis stores provider/model/prompt/schema/input provenance, status, latency, result, failure, and override outcome.
+- “Authenticity” is expressed as manipulation-risk/evidence signals, never definitive truth or falsity.
+- Public derivatives require privacy redaction independent of the classification result.
+
+## Security Decisions
+
+- Public registration creates only citizens; privileged accounts require invitation and scoped assignment.
+- Authorization is backend-enforced and default-deny.
+- Target access control uses protected role templates, custom roles, stable permissions, scoped assignments, and expiring delegations.
+- Reserved permissions and separation of duties prevent self-elevation.
+- Tokens are hashed, expiring, single-use where applicable; refresh replay revokes the token family.
+- Public map, analytics, sockets, Socio, exports, logs, and AI prompts must not leak citizen identity or private evidence.
+
+## Product Decisions
+
+- First release: Hindi/English PWA, anonymous tracking, in-app notifications, and email.
+- Socio is explicit opt-in, alias-based, authenticated for interaction, moderated, and separate from official records.
+- Social popularity never directly changes priority or SLA; only verified corroboration may become a bounded policy input.
+- Citizen non-response never permits AI-only or timeout-only closure; administrative closure requires verified evidence, authorized review, reminders, and appeal/reopen support.
+- SMS, WhatsApp, IVR, kiosks, call-centre, and government integrations are later adapters requiring approval.
 
 ## Known Issues
-- Configured PostgreSQL/Supabase database was unreachable during the 2026-08-30 audit.
-- A Prisma baseline migration is present but not applied because the configured remote database is unreachable.
-- M3 adds `GeographyDataset` version/checksum metadata and validates idempotent GeoJSON imports; migration `0003_geography_metadata` must be applied before seeding.
-- M4 adds private `MediaAsset` records, magic-byte validation, SHA-256 hashes, random storage keys, and one-year retention metadata; migration `0004_secure_media` must be applied before report creation.
-- M5 adds transition enforcement, atomic audit/outbox writes, duplicate selection validation, and report idempotency; migration `0005_incident_transaction_safety` must be applied before idempotent report submissions.
-- M6 public map list responses use an explicit redacted DTO, enforce `isPublic`, bound bbox/limits, and never serialize reports or media URLs.
-- Development role testing uses `npm run prisma:seed:demo-users --workspace=services/api` with a local `DEMO_USER_PASSWORD`; demo accounts are never created automatically in production.
-- Admin incident operations now use a themed assignment modal and worker evidence dropzone; incident-list API mapping is defensive against missing `trackingId`, description, category, and ward fields.
-- Prisma is configured with `DATABASE_URL` for pooled runtime traffic and `DIRECT_URL` for migration/session-mode traffic; both must be supplied in local environment files.
-- The worker now claims durable PostgreSQL jobs; legacy SLA/ML interval functions remain for later migration.
-- Public incident endpoints can expose nested Report/contact data and do not consistently enforce `isPublic`.
-- Registration accepts a client-provided role and JWT code has insecure fallback secrets.
-- Refresh tokens are not stored/revoked and web tokens are kept in `localStorage`.
-- Socket.IO allows open CORS and unauthenticated client-selected user-room joins.
-- Mutation endpoints do not consistently enforce city/zone/ward/department object scope.
-- Upload validation trusts client MIME metadata and evidence originals use public URLs.
-- Duplicate detection is distance-only; citizen-selected duplicate IDs are ignored by the backend.
-- Admin People is now API-backed and scoped; Analytics now honestly reports unavailable until M18; Settings controls are read-only until persistence APIs are implemented.
-- SLA execution is an in-process one-tier interval rather than a durable tiered engine.
-- Email and SMS delivery are not implemented despite UI labels.
-- Current AI usually falls back to ImageNet mapping or text heuristics; Gemini code is present but unwired.
-- Resolution verification, citizen confirmation/dispute, and the full audit verification flow are incomplete.
-- Lint currently fails and Jest is referenced but not installed.
-- Most feature work is uncommitted; preserve the existing dirty worktree.
+
+- Most feature work is uncommitted; preserve the dirty worktree.
+- Web lint currently reports 93 errors and 93 warnings; accessibility acceptance remains incomplete.
+- The production webpack build passes through Next's in-process TypeScript compiler. Turbopack cannot bind its internal process port in the current sandbox.
+- Local M1 migration, queue, readiness-outage, and restore checks pass; empty-database, hosted CI, and production-like restore/readiness evidence remain outstanding.
+- M2 API/security integration and responsive official MFA/session screens are implemented; the policy matrix passes, but database-backed rerun and browser/hosted production evidence remain open.
+- M3 now has checksum-verified, idempotent, city-scoped geography imports, dataset history, deterministic validation tests, and an official/admin Geography page. Database import, coordinate fixture, and cross-city denial acceptance are pending restored database access.
+- M4 report intake now requires explicit consent in the citizen UI, uses a stable retry idempotency key, and sends canonical `lat`/`lng` geography resolution requests. Server-side hostile upload and private-storage safeguards remain enforced.
+- M4 reporting now has restore-safe baseline taxonomy migration `0020_taxonomy_baseline`, supported-category bootstrap, and themed report/AI success-error toasts.
+- M5 now provides an explicit idempotent lifecycle transition command backed by the guarded state machine, transactional audit log, and deterministic outbox idempotency key. Database-backed concurrency and cross-scope acceptance remain pending.
+- M6 public map DTOs now generalize coordinates to an approximately 100m grid, omit internal priority scores, optionally return privacy-grid clusters, and provide an accessible list alternative.
+- M8 People Directory now has scoped employee detail and audited suspension/reactivation; protected custom roles, permission assignments, delegations, and organization profiles remain pending.
+- Official invitation links are enforced as one-minute, single-use tokens; successful activation redirects to the `/login` alias route.
+- M8 now includes a compatibility namespaced permission catalog and default-deny guards for workforce read, invitation, and status operations; persistent custom-role assignments remain the next RBAC slice.
+- M8 includes additive migration `0021_rbac_workforce` with persistent permission, role, assignment, scope, delegation, organization, and employment-profile tables. It must be applied to a disposable/approved database before custom-role APIs are exercised.
+- M9 routing precedence is deterministic and explainable: ward rule, city rule, priority, effective date, then stable rule ID; cross-city department and ward assignments are denied.
+- M11 uses timezone-aware working calendars and deterministic tier thresholds; SLA pauses require a reason and matching city/zone/department scope.
+- M12 notifications use durable user-owned records, cursor pagination, unread totals, server-generated allow-listed deep links, idempotent outbox delivery, retryable worker attempts, and Socket.IO as a low-latency hint only. Email/SMS remain explicitly provider-dependent and cannot be represented as delivered until a provider reports success.
+- M13 AI intake uses a versioned advisory-only policy (`m13-v2`), exposes active provider/model status, returns bounded adaptive questions from visual signals, and preserves null confidence plus human review when AI is unavailable or uncertain. Citizen answers remain editable and are included in the citizen-confirmed description; AI cannot independently resolve or finalize a report.
+- M14 duplicate intelligence keeps Reports separate from Incidents. Candidate scores combine bounded spatial/category/temporal signals and optional visual/hash signals; automatic linking is explainable and candidate review is backend-scoped. LINK moves only the Report association and preserves the original decision/audit record; NOT_DUPLICATE rejects the candidate without deleting civic history.
+- M15 priority is calculated by versioned deterministic policy `m15-v1`; every score returns signal points and explanations. AI confidence and corroboration are bounded inputs, ordinary popularity is excluded, and authorized temporary overrides require a reason, expiry, and audit event.
+- M16 resolution verification combines deterministic GPS/provenance rules with advisory before/after AI output. Officials can approve/reject evidence with an audit reason from the incident workbench, citizen confirmation/dispute remains explicit, administrative closure requires verified evidence and an expired confirmation window, and citizens can appeal a resolved Incident within seven days. A rollback-isolated database acceptance harness covers the full trust loop once migration 0024 is applied.
+- P0 role/scope and cross-resource E2E coverage is incomplete.
+- Field-worker mobile/offline flow is incomplete.
+- SLA scheduling still needs durable queue acceptance and multi-worker integration coverage.
+- Email delivery needs approved provider/retry/bounce validation; SMS is not configured.
+- Groq needs startup canary, labelled evaluation, and privacy-redaction acceptance; the API now exposes the configured provider/model/schema as advisory metadata.
+- Duplicate intelligence, deterministic priority, complete resolution verification, tamper-evident audit, reproducible public analytics, civic health, assets, predictions, Socio, external integrations, and multi-city control remain incomplete.
+- M14 migration `0022_duplicate_intelligence` is additive and must be applied before candidate review endpoints are exercised; visual embeddings are intentionally not enabled until a labelled evaluation set is approved.
+- M15 migration `0023_priority_engine` is additive and must be applied before priority explanation/override endpoints are exercised.
+- M16 migration `0024_resolution_appeals` is additive and must be applied before citizen appeal endpoints are exercised.
+- M17 migration `0025_verifiable_audit` adds per-incident chain ordering, hash versions, and durable chain-head anchors. New audit writes use canonical `m17-v1` hashes under a transaction-scoped advisory lock; legacy rows remain verifiable as historical records.
+- M18 migration `0026_accountability_metrics` adds versioned metric definitions and daily snapshot storage. Public scorecards use `m18-v1`, minimum cohort suppression, bounded windows, and no identity/coordinate exposure.
+- M19 migration `0027_civic_health` adds city-scoped health policies and ward snapshots, provisions the default `m19-v1` policy for existing cities, and uses idempotent ward/date/policy upserts. The score is explainable, suppresses cohorts below five, and reports confidence/completeness rather than false precision.
+- M20 migration `0028_civic_assets` adds city-scoped civic assets, import runs, active Incident links, and maintenance events. Imports are checksum-idempotent, preview-first, and rollback only assets created by that run without silently replacing unrelated assets.
+- M21 migration `0029_predictive_intelligence` stores versioned forecast runs/cells, held-out baseline evaluations, operator feedback, attempts, leases, and drift status. `m21-baseline-v1` is advisory-only, suppresses sparse groups, includes asset-linked signals, and uses privacy-safe ward/category counts with bounded horizons and uncertainty intervals.
+- M22 migration `0030_socio_publishing` stores explicit citizen publication consent and consent history, public aliases, redacted Incident-linked posts, follow scopes, saves, and official public status-update history. `/preview` is non-persisting; production is fail-closed unless `CIVIQUE_SOCIO_ENABLED=true`. Revocation removes only the public projection; the official Report, Incident, evidence, and audit history remain unchanged.
+- M23 migration `0031_socio_trust` adds one-per-user support reactions, structured pending corroboration with scoped review, shallow comments/revisions, duplicate-safe content reports, moderation cases/actions/appeals with restore, bounded reputation context, and user block/mute controls. Moderation can remove or lock the public projection but never deletes the official Report, Incident, evidence, or audit history.
+- M24 migration `0032_government_integrations` adds city-scoped adapter records, signed inbox events with monotonic sequence checks, unique external references, idempotent delivery records/retries, receipts, and conflict records. HMAC webhooks require a timestamp, five-minute replay window, unique event ID, provider secret, and reject older sequences. Integrations fail closed unless `CIVIQUE_INTEGRATIONS_ENABLED=true`; activation additionally requires `CIVIQUE_INTEGRATION_APPROVAL_TOKEN`, and no government adapter is enabled or claimed by default.
+- M25 migration `0033_multi_city_control_plane` adds tenant settings with an existing-city backfill, city branding/locale/timezone/data-residency metadata, default pilot feature flags, versioned policy activation, lifecycle events, and provisioning history. Super administrators provision, mutate, activate, and deactivate tenants; city administrators can inspect only their assigned city. Public tenant configuration exposes only allow-listed fields and flags.
+- Whole-platform verification on 2026-09-21: API/web/worker typechecks, API/worker unit suites, API/worker builds, web webpack build, M24 security tests, and M25 tenant policy tests pass. Database-backed integration suites are blocked by Supabase pooler `P1001`; web lint remains an existing 168-error/104-warning backlog.
+- Web error presentation hardening: `apps/web/lib/api/client.ts` now converts Prisma, database, network, stack, and oversized server messages into short status-aware user messages; technical details remain server-side. Global Civique toasts are width-capped for mobile readability.
+- M13 civic relevance hardening: Groq now returns separate authenticity, civic relevance, and `ACCEPT`/`REJECT`/`REVIEW_REQUIRED` decision fields. Authentic but irrelevant images are rejected as non-civic evidence; image-specific follow-up questions are accepted only for accepted or review-required evidence. The citizen modal and submission guard block rejected evidence, and the worker records the rejection without rejecting an existing Incident that received an unrelated corroborating Report.
+- M13 question-first intake: accepted/review-required draft analysis now opens a dedicated citizen question dialog before insights. Questions are image-specific and normalized to exactly three choices; the selected answers are sent in a second Groq pass, which produces the detailed AI insights shown in the review modal. The insights modal no longer renders the question form.
+- The M13 question dialog now presents one question per screen with preserved answers, progress segments, Back/Continue controls, three choice cards, and Civique dark-green/lime visual treatment.
+- If the second answer-aware Groq request times out, is unavailable, or returns an unusable result, the citizen flow preserves the first civic-relevance analysis and citizen answers for review instead of showing the generic “Manual Entry Required” state.
+
+## Known Bugs
+
+- Track concrete reproducible bugs in the active module section of `docs/TASK_STATUS.md`; do not treat missing planned features as bugs.
+
+## Temporary Workarounds
+
+- Legacy `User.role` authorization remains during the future additive RBAC migration.
+- Legacy page-level styling remains only where a route has not completed its functionality-preservation migration.
+- External channels may remain `PENDING_CONFIGURATION`; they must never claim successful delivery.
+- Next uses its supported in-process TypeScript compiler API for production builds because CLI `--showConfig` capture is empty in the current sandbox runtime.
+- Prisma Client must be regenerated from `services/api/prisma/schema.prisma` after schema changes; in the current sandbox this requires running Prisma generation from `services/api` with approved process permissions.
 
 ## Environment Requirements
-- Node.js (v22.22.1+)
-- Python (3.14+)
-- Postgres (Supabase)
+
+- Node.js 22+ and npm workspaces.
+- Python 3.14+ for the current ML service environment.
+- PostgreSQL/Supabase with separate runtime and migration URLs.
+- Private object-storage credentials for evidence flows.
+- Provider credentials only for explicitly approved live canaries.
+
+## Important Commands
+
+```text
+npm test
+npm run typecheck
+npm run lint
+npm run build:web
+npm run build:api
+npm run build:worker
+npm run health:check
+npm run verify:m1
+npm run verify:overall
+```
+
+Database integration and live-provider commands must target disposable/non-production resources and follow the module's approval requirements.
+
+## Architectural Decisions
+
+- npm workspaces for the monorepo.
+- PostgreSQL/Supabase and Prisma as the authoritative store.
+- Durable PostgreSQL jobs and transactional outbox.
+- Incremental Dark Green Pro component migration.
+- Provider-neutral AI boundary with configurable Groq vision model.
+- Hashed auth action tokens and post-persistence classification.
+- Durable sequenced real-time events.
+- Preference-aware durable notification delivery.
+- `Implementation.md` as sole master specification with protected/custom RBAC and opt-in Socio target architecture.
+- Blocking-versus-degraded readiness and owner-bound renewable worker leases for M1 resilience.
+- Encrypted official TOTP, double-submit CSRF for cookie mutations, and durable authentication security events for M2.
+
+See [`DECISIONS.md`](DECISIONS.md) for reasons and consequences.
 
 ## Next Recommended Task
-- Apply migrations `0006_department_routing` through `0010_ai_analysis` to a reachable development database, run M12/M13 acceptance tests, then continue M14.
 
-## Module Completion History
+Report submission P2028 hardening: duplicate detection now uses a bounded geographic pre-filter, report persistence allows a cold database connection up to 45 seconds, and transaction timeout failures return a retry-safe sanitized response. API typecheck/build and duplicate helper tests pass. Re-run a real citizen submission with the same `Idempotency-Key` after restarting the API; database-backed verification still requires the restored Supabase connection.
 
-> The entries below are historical implementation notes. Their former `Completed` labels predate the correction-first Definition of Done and do not represent current acceptance status.
+The citizen report wizard now redirects successful submissions directly to `/report/:reportId` using the returned durable report ID, with a single success toast. Web typecheck passes.
 
-### Module: M6 — Public Live Map
-- **Status**: Completed
-- **Implemented**: Interactive live map view with Leaflet, status/category filter checkboxes, case inspection drawers, and premium styling.
-- **Files Changed**:
-  - [apps/web/app/map/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/map/page.tsx)
-  - [services/api/src/routes/incidents.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/routes/incidents.ts)
-  - [services/api/src/app.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/app.ts)
-- **Database Changes**: None
-- **API Changes**:
-  - `GET /api/v1/incidents` (with `bbox`, `status`, and `category` query filters)
-  - `GET /api/v1/incidents/:id` (fetch single incident with ward boundaries and linked reports)
-- **Frontend Changes**:
-  - Real-time filtered map screen under `/map` with search filters, dynamic category/status checkboxes, custom pulsing map markers, and slide-over side-panel drawer.
-- **Real-time Changes**: None (scheduled for M7)
-- **Tests**: Monorepo typechecking passes; REST endpoints verified.
-- **Known Issues**: None
-- **Next Module**: M7 — Real-Time Communication
+Field-worker resolution evidence submission was hardened after slow restored-database requests caused Prisma interactive transactions to expire. Original and normalized evidence uploads now run in parallel, successful partial uploads are tracked for cleanup, the resolution transaction no longer loads unrelated ward/report relations, and the transaction has explicit 10-second acquisition/45-second execution budgets. Prisma P2028/transaction-expiry failures return a concise retry-safe 503 response instead of provider details. API typecheck passes; re-run the field-worker resolution flow against the restored Supabase environment.
 
-### Module: M7 — Real-Time Communication
-- **Status**: Completed
-- **Implemented**: Socket.io configuration on Express backend wrapping HTTP, broadcasting event triggers for incident creation/updates, and client-side listeners updating Next.js map states instantly.
-- **Files Changed**:
-  - [services/api/src/utils/socket.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/utils/socket.ts)
-  - [services/api/src/server.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/server.ts)
-  - [services/api/src/routes/reports.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/routes/reports.ts)
-  - [apps/web/package.json](file:///home/fardeen/Documents/Projects/Civique/apps/web/package.json)
-  - [apps/web/app/utils/socket.ts](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/utils/socket.ts)
-  - [apps/web/app/map/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/map/page.tsx)
-- **Database Changes**: None
-- **API Changes**: Added WebSockets layer under existing HTTP server.
-- **Frontend Changes**: Dynamically connects map page to socket server and synchronizes state values.
-- **Real-time Changes**: Integrates Socket.io gateway sync.
-- **Tests**: Workspace typechecking passes.
-- **Known Issues**: None
-- **Next Module**: M8 — Admin Dashboard
+Fixed the shared Dialog focus trap so inline callback recreation cannot restore focus away from controlled inputs during typing. Web typecheck passes.
 
-### Module: M8 — Admin Dashboard
-- **Status**: Completed
-- **Implemented**: Integrated real-time metric calculation endpoints scoped dynamically to active user scopes, dynamic map preview, and guarded admin layout access.
-- **Files Changed**:
-  - [services/api/src/routes/incidents.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/routes/incidents.ts)
-  - [apps/web/app/admin/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/admin/page.tsx)
-- **Database Changes**: None
-- **API Changes**:
-  - Updated `GET /api/v1/incidents` to support role-scoping geographic/department queries.
-  - Added `GET /api/v1/incidents/admin-metrics` (SLA compliance, open counts, resolved today, recent scoped actions).
-- **Frontend Changes**:
-  - Refactored admin overview dashboard to bind with dynamic backend metrics, loaded ticket lists in a premium table, and rendered interactive Leaflet previews showing only incidents inside scope.
-- **Real-time Changes**: Scoped database reads.
-- **Tests**: Entire workspace typechecking passes.
-- **Known Issues**: None
-- **Next Module**: M9 — Department Routing
+Lifecycle notifications now include `REPORT_RECEIVED` for the Incident triage owner, so Ward Officers receive new corroborating/duplicate report receipts even when no new `WARD_OWNER_ASSIGNED` event is emitted. Worker typecheck and tests pass.
 
-### Module: M9 — Department Routing
-- **Status**: Completed
-- **Implemented**: Populated Indore default municipal utility departments, integrated automatic category routing with dynamic SLA deadline updates, added manual routing assignment endpoints with cryptographic change tracking, and refactored the admin view form to bind inputs dynamically.
-- **Files Changed**:
-  - [services/api/prisma/seed.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/prisma/seed.ts)
-  - [services/api/src/utils/audit.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/utils/audit.ts)
-  - [services/api/src/routes/users.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/routes/users.ts)
-  - [services/api/src/routes/geography.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/routes/geography.ts)
-  - [services/api/src/routes/incidents.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/routes/incidents.ts)
-  - [services/api/src/routes/reports.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/routes/reports.ts)
-  - [services/api/src/app.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/app.ts)
-  - [apps/web/app/admin/incidents/[id]/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/admin/incidents/[id]/page.tsx)
-- **Database Changes**: Seeding municipal departments linked to Indore.
-- **API Changes**:
-  - Added `GET /api/v1/geography/departments` (lists seeded departments).
-  - Added `GET /api/v1/users/workers` (lists active field workers).
-  - Added `POST /api/v1/incidents/:id/assign` (assigns incident to department and/or worker, updating status).
-  - Added `PATCH /api/v1/incidents/:id/status` (updates incident state with machine validation).
-- **Frontend Changes**:
-  - Upgraded incident detail operations form to query routing metadata and handle dynamic updates.
-  - Replaced mockup geofence map with an interactive Leaflet map instance centering the incident.
-- **Real-time Changes**: WebSockets broadcast updates on status/assignment changes.
-- **Tests**: Monorepo build and typecheck validations pass.
-- **Known Issues**: None
-- **Next Module**: M10 — Field Worker Operations
+Invitation form errors now use a dialog-local alert instead of the People Directory page-level alert, keeping validation and API errors above the modal content. Web typecheck passes.
 
-### Module: M10 — Field Worker Operations
-- **Status**: Completed
-- **Implemented**: Implemented start work and resolution submit endpoints on the backend, exported raw upload multer instances, and conditionally rendered repair taskboards and upload forms on the incident detail view for field workers.
-- **Files Changed**:
-  - [services/api/src/middleware/upload.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/middleware/upload.ts)
-  - [services/api/src/routes/incidents.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/routes/incidents.ts)
-  - [apps/web/app/admin/incidents/[id]/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/admin/incidents/[id]/page.tsx)
-- **Database Changes**: None
-- **API Changes**:
-  - Added `POST /api/v1/incidents/:id/start` (marks status IN_PROGRESS and sets startedAt).
-  - Added `POST /api/v1/incidents/:id/resolve` (uploads resolution after-photo, marks RESOLUTION_SUBMITTED, logs notes, and appends photoUrl).
-- **Frontend Changes**:
-  - Embedded a dedicated role-guarded task board console inside the incident detail page, showing "Start Repair" and "Submit Resolution" upload actions to field workers, and displaying submitted resolution evidence details.
-- **Real-time Changes**: WS broadcast triggers on status transitions.
-- **Tests**: Monorepo compiles clean and passes typecheck.
-- **Known Issues**: None
-- **Next Module**: M11 — SLA & Escalation
+Report intake performance hardening: original and normalized evidence uploads now run in parallel, report persistence avoids a redundant submission-status update, and routing decisions reuse the already-resolved routing result. API typecheck/build pass. The attached trace still indicates high baseline Supabase/Postgres round-trip latency, so database placement/pooler configuration remains an environment-level optimization.
 
-### Module: M11 — SLA & Escalation
-- **Status**: Completed
-- **Implemented**: Created background monitoring cron scheduler daemon, implemented dynamic assignee officer escalation rules, added manual SLA scanning path, and configured real-time updates.
-- **Files Changed**:
-  - [services/api/prisma/schema.prisma](file:///home/fardeen/Documents/Projects/Civique/services/api/prisma/schema.prisma)
-  - [services/api/src/jobs/slaEscalation.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/jobs/slaEscalation.ts)
-  - [services/api/src/server.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/server.ts)
-  - [services/api/src/routes/incidents.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/routes/incidents.ts)
-- **Database Changes**: Added `isPublic` boolean field mapped to PostgreSQL.
-- **API Changes**:
-  - Added `POST /api/v1/incidents/sla-scan` (triggers a synchronous scan checking SLA breaches).
-- **Frontend Changes**: WS updates synchronizes map coordinates instantly during escalation.
-- **Real-time Changes**: WebSockets broadcast triggers on SLA escalation updates.
-- **Tests**: Created E2E scan test verification script, Monorepo typechecking passes.
-- **Known Issues**: None
-- **Next Module**: M12 — Notifications System
+Notification links use an Incident ID. Report detail and timeline APIs now resolve both Report IDs and scoped Incident IDs, fixing Ward Officer notification navigation without weakening citizen ownership or official scope checks. API typecheck passes.
 
-### Module: M12 — Notifications System
-- **Status**: Completed
-- **Implemented**: Setup notifications table, built helper dispatcher utility emitting events through Socket.io private rooms, registered notification triggers for all core actions, created custom notification dropdown/panel component with real-time push toast alerts, and integrated bell in mobile and desktop layouts.
-- **Files Changed**:
-  - [services/api/prisma/schema.prisma](file:///home/fardeen/Documents/Projects/Civique/services/api/prisma/schema.prisma)
-  - [services/api/src/utils/notifications.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/utils/notifications.ts)
-  - [services/api/src/utils/socket.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/utils/socket.ts)
-  - [services/api/src/routes/notifications.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/routes/notifications.ts)
-  - [services/api/src/app.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/app.ts)
-  - [services/api/src/routes/reports.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/routes/reports.ts)
-  - [services/api/src/routes/incidents.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/routes/incidents.ts)
-  - [services/api/src/jobs/slaEscalation.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/jobs/slaEscalation.ts)
-  - [apps/web/app/components/NotificationBell.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/components/NotificationBell.tsx)
-  - [apps/web/app/admin/layout.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/admin/layout.tsx)
-- **Database Changes**: Added `notifications` relation schema mappings.
-- **API Changes**:
-  - Added `GET /api/v1/notifications` (lists in-app notifications).
-  - Added `POST /api/v1/notifications/:id/read` (marks single notification as read).
-  - Added `POST /api/v1/notifications/read-all` (marks all notifications as read).
-- **Frontend Changes**: Integrated interactive clickable `NotificationBell` in mobile header and desktop topbar with live update states and hot-toast alert redirection logic.
-- **Real-time Changes**: WS broadcast triggers on personal `notification:received` events.
-- **Tests**: Created database verification test script, Monorepo typechecking passes.
-- **Known Issues**: None
-- **Next Module**: M13 — AI Classification System
+Incident workbench assignment controls now follow the lifecycle state machine: field-worker assignment is disabled during `AI_REVIEW` with an explicit classification-first explanation, and the acknowledge action is shown only for `OPEN` incidents. Web typecheck passes.
 
-### Module: M12.5 — Premium UI/UX & Legibility Redesign
-- **Status**: Completed
-- **Implemented**: Overhauled fonts and sizing system to resolve legibility issues; implemented a unified pulsing LoadingState component and applied responsive mobile layouts to citizen forms and live maps.
-- **Files Changed**:
-  - [apps/web/app/globals.css](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/globals.css)
-  - [apps/web/app/components/Sidebar.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/components/Sidebar.tsx)
-  - [apps/web/app/components/Shell.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/components/Shell.tsx)
-  - [apps/web/app/components/NotificationBell.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/components/NotificationBell.tsx)
-  - [apps/web/app/components/LoadingState.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/components/LoadingState.tsx)
-  - [apps/web/app/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/page.tsx)
-  - [apps/web/app/report/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/report/page.tsx)
-  - [apps/web/app/map/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/map/page.tsx)
-  - [apps/web/app/admin/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/admin/page.tsx)
-  - [apps/web/app/admin/incidents/[id]/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/admin/incidents/[id]/page.tsx)
-- **Database Changes**: None
-- **API Changes**: None
-- **Frontend Changes**:
-  - Replaced native loading checks and tailwind spinners with custom brand pulsing logo loader.
-  - Scaled up font-size tags from tiny sizes to highly visible sizes across all roles and user interfaces.
-  - Optimized form inputs, category tiles, geofencing map pin offsets, and detail drawer overlays for mobile viewport responsiveness.
-- **Real-time Changes**: None
-- **Tests**: Monorepo build and typecheck validations pass.
-- **Known Issues**: None
-- **Next Module**: M13 — AI Classification System
+The Incident workbench now exposes a prominent `Review AI & Open` action during `AI_REVIEW`. Ward Officers can confirm/override the category immediately through the audited classification endpoint; they are not required to wait for the AI worker. Web typecheck passes.
 
-### Module: M12.6 — Manrope Font & High Visibility UI Redesign
-- **Status**: Completed
-- **Implemented**: Swapped system-wide font configuration for Manrope loaded from Google Fonts; redesigned form card panels with clean header bands (`bg-[#faf9f6]`, `border-b`) and strong mahogany labels; scaled up text weights and colors to high-contrast values.
-- **Files Changed**:
-  - [apps/web/app/layout.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/layout.tsx)
-  - [apps/web/app/globals.css](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/globals.css)
-  - [apps/web/app/report/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/report/page.tsx)
-  - [apps/web/app/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/page.tsx)
-  - [apps/web/app/map/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/map/page.tsx)
-  - [apps/web/app/admin/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/admin/page.tsx)
-  - [apps/web/app/admin/incidents/[id]/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/admin/incidents/[id]/page.tsx)
-- **Database Changes**: None
-- **API Changes**: None
-- **Frontend Changes**:
-  - Replaced thin Poppins weights with sturdy Manrope `font-normal`/`font-medium`/`font-bold` configurations.
-  - Form sections wrapped in visually well-defined card elements with separate top headers and bottom action bars.
-  - Labels and descriptions are updated to high-contrast colors (`#2B2523`) for maximum legibility.
-- **Real-time Changes**: None
-- **Tests**: Monorepo typecheck validation passed clean.
-- **Known Issues**: None
-- **Next Module**: M13 — AI Classification System
+Incident workbench actions are now role-scoped in the UI: only operational officials see acknowledge/classification/routing/assignment/verification controls, while only the assigned Field Worker sees Start Repair and Submit Repair Proof. Backend authorization remains authoritative.
 
-### Module: M12.7 — Detailed Timeline Tracker & Rich Citizen Profile
-- **Status**: Completed
-- **Implemented**: Overhauled the citizen case details page with a premium vertical progress tracker mapping submissions to active crew dispatches, assigned field workers, and target departments. Redesigned the citizen profile with interactive identity credentials, phone lines, ward selection dropdowns, and push alert triggers.
-- **Files Changed**:
-  - [services/api/src/routes/reports.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/routes/reports.ts)
-  - [apps/web/app/report/[id]/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/report/[id]/page.tsx)
-  - [apps/web/app/profile/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/profile/page.tsx)
-- **Database Changes**: None
-- **API Changes**:
-  - Extended GET `/reports/:id` and GET `/reports` responses to manually fetch and attach `incident.worker`, `incident.assignee` and `incident.department` objects without breaking constraints.
-- **Frontend Changes**:
-  - Overhauled case details layout to display a vertical 5-step timeline (Submission Received, Grievance Boundary Verification, Crew Dispatch & Assignment, Repairs In Progress, Resolution Verified) with corresponding dates and dynamic content.
-  - Implemented interactive forms on the profile settings tab for Name, Phone, and Ward limits, along with toggles for SMS, Email, and SLA alert preferences.
-- **Real-time Changes**: None
-- **Tests**: Checked compiling and verified typechecks build clean.
-- **Known Issues**: None
-- **Next Module**: M13 — AI Classification System
+Field-worker start transitions now use an explicit Prisma transaction budget and avoid loading unrelated ward/report relations during the write. P2028 expiry is mapped to a retry-safe 503 message. API typecheck/build pass.
 
-### Module: M12.8 — Citizen Dashboard Dynamic Portal & Sidebar Integration
-- **Status**: Completed
-- **Implemented**: Connected the citizen profile page to the navigation menu sidebar; enabled dynamic API fetches on the citizen dashboard home page to query and display real citizen reports list, counts, and recent timeline updates.
-- **Files Changed**:
-  - [apps/web/app/components/Sidebar.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/components/Sidebar.tsx)
-  - [apps/web/app/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/page.tsx)
-- **Database Changes**: None
-- **API Changes**: None
-- **Frontend Changes**:
-  - Added a dedicated "My Reports" option to the citizen sidebar routing to `/profile`.
-  - Configured the sidebar footer settings link to point to `/profile` for citizens, while maintaining `/admin/settings` for administrators.
-  - Rewrote the citizen home dashboard page to fetch from `GET /api/v1/reports` and display real metrics count.
-  - Rendered a list of the 3 most recent reported updates in the neighborhood feed with direct clickable links leading to their timeline views (`/report/[id]`).
-- **Real-time Changes**: None
-- **Tests**: Checked compiling and verified typechecks build clean.
-- **Known Issues**: None
-- **Next Module**: M13 — AI Classification System
+Report Form, AI Insights Modal & Platform Loading Screen redesign: replaced the basic pulse placeholder with a concentric orbital-ring scanner and status ticker in `LoadingState.tsx`. Restructured `AiAnalysisModal.tsx` from a cramped 3-column squeeze into an airy, balanced 2-panel inspection cockpit with laser scanning animation, forensic authenticity breakdown, and high-contrast editable inputs. Rebuilt `report/page.tsx` as a full-width (`max-w-[1720px]`) bespoke Incident Intake Studio, eliminating blank side margins with a layered `bg-slate-50/70` canvas, official municipal department tiles, quick-fill civic template chips, an interactive 4-tier urgency matrix, Indore ward geofencing, and a live readiness & AI telemetry rail. Monorepo typecheck and Next.js webpack production build pass.
 
-### Module: M12.9 — Persistent Navigation Sidebar Consistency Redesign
-- **Status**: Completed
-- **Implemented**: Wrapped the profile dashboard page and the individual case timeline details page inside the standard Shell layout, ensuring the navigation sidebar remains persistently visible.
-- **Files Changed**:
-  - [apps/web/app/profile/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/profile/page.tsx)
-  - [apps/web/app/report/[id]/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/report/[id]/page.tsx)
-- **Database Changes**: None
-- **API Changes**: None
-- **Frontend Changes**:
-  - Removed manual `CitizenHeader` top nav declarations.
-  - Wrapped content inside the `<Shell>` layout structure to persist the left-side global sidebar navigation.
-  - Aligned page gutters, padding, and animations with home, submit form, and map dashboards.
-- **Real-time Changes**: None
-- **Tests**: Monorepo typechecks pass successfully.
-- **Known Issues**: None
-- **Next Module**: M13 — AI Classification System
+Civique Login Page Redesign: completely redesigned `/signin` and `/login` to match the Dribbble architectural reference with a warm linen canvas (`#f2f4ec`), rounded card shell, role switcher (`🔘 As a Citizen` | `⚪ As an Official`), rounded pill social/form inputs, orange quotation testimonial, and a bespoke SVG architectural building skyline with dashed window columns and geometric trees in Civique's palette. Monorepo typecheck and web build pass.
 
-### Module: M12.10 — Quick Profile Header Shortcut & Bento Grid Widening
-- **Status**: Completed
-- **Implemented**: Restored the sidebar color palette to brand mahogany (`bg-[#351008]`) with terracotta active highlights (`bg-[#EF6820]`); made the header initials avatar clickable pointing to `/profile` (if citizen); expanded the main workspace container widths to `max-w-7xl` and split the layouts into dual-column bento grids.
-- **Files Changed**:
-  - [apps/web/app/components/Sidebar.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/components/Sidebar.tsx)
-  - [apps/web/app/components/Shell.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/components/Shell.tsx)
-  - [apps/web/app/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/page.tsx)
-  - [apps/web/app/report/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/report/page.tsx)
-  - [apps/web/app/profile/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/profile/page.tsx)
-  - [apps/web/app/report/[id]/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/report/[id]/page.tsx)
-- **Database Changes**: None
-- **API Changes**: None
-- **Frontend Changes**:
-  - Restored rich brown color palette to global Sidebar with sand texts and terracotta active badges.
-  - Linked top-right header initials avatar to profile options with responsive hover states and pulsing green active indicator.
-  - Scaled workspace widths to `max-w-7xl` to fill widescreen monitors.
-  - Splitted the citizen dashboard into a dual-column bento grid (Left: contribution counters, recent reports; Right: AI alerts, geofence area, and a new Indore Ward Helpline Directory card).
-- **Real-time Changes**: None
-- **Tests**: Monorepo static compilation checks succeed clean.
-- **Known Issues**: None
-- **Next Module**: M13 — AI Classification System
-
-### Module: M13 — AI Classification
-- **Status**: Completed
-- **Implemented**: Created pretrained MobileNetV2 model route in Python FastAPI service, later upgraded to a dedicated `CivicClassifier` class wrapping ConvNeXt-Tiny architecture. Implemented description-based keyword matcher fallbacks if custom weights are missing (returning status: "unavailable"). Modified Express API report route to synchronously request category classification, saving confidence scores, model versions, and top predictions list. Implemented a background retry daemon to resolve pending submissions offline with a 15-second Prisma transaction timeout. Decoupled and built the reusable `CiviqueAIVerification` frontend component supporting progressive states. Integrated smart category suggestions, card highlights, badges, and confirmation triggers.
-- **Files Changed**:
-  - [services/ml/requirements.txt](file:///home/fardeen/Documents/Projects/Civique/services/ml/requirements.txt)
-  - [services/ml/app/classifier.py](file:///home/fardeen/Documents/Projects/Civique/services/ml/app/classifier.py)
-  - [services/ml/app/main.py](file:///home/fardeen/Documents/Projects/Civique/services/ml/app/main.py)
-  - [services/api/src/utils/ml.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/utils/ml.ts)
-  - [services/api/src/routes/reports.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/routes/reports.ts)
-  - [services/api/src/jobs/mlRetry.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/jobs/mlRetry.ts)
-  - [services/api/src/server.ts](file:///home/fardeen/Documents/Projects/Civique/services/api/src/server.ts)
-  - [apps/web/app/report/page.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/report/page.tsx)
-  - [apps/web/app/components/CiviqueAIVerification.tsx](file:///home/fardeen/Documents/Projects/Civique/apps/web/app/components/CiviqueAIVerification.tsx)
-- **Database Changes**: None
-- **API Changes**:
-  - FastAPI: Added `POST /api/v1/classify/category` returning category, confidence, top predictions list, and model version.
-  - Express REST API: Integrated AI classification updates inside `POST /api/v1/reports`, added `/api/v1/reports/classify-draft` returning model version and top predictions parameters.
-- **Frontend Changes**:
-  - Expanded category grid with 7 new categories.
-  - Implemented real-time classification call instantly on image upload with visual AI loader and confidence score badge.
-  - Extracted the reusable `CiviqueAIVerification` component to render loading, success, warning, pending review, and offline fallback statuses.
-  - Added Suggestion Confirmation Banner in Step 2, dynamic highlighted cards, and AI Suggestion confidence badges on recommended tiles.
-- **Real-time Changes**: WebSockets broadcast triggers on retry updates.
-- **Tests**: Created Python and Node.js scratch tests verifying classification, database transaction retry loops, and timeout limits.
-- **Known Issues**: None
-- **Next Module**: M14 — Duplicate Detection
+Finish M25 acceptance with migration `0033_multi_city_control_plane`, full cross-city isolation suites, and browser scope evidence. Carry forward M1–M24 gates; do not enable multi-city operations until every tenant-sensitive surface passes isolation review.

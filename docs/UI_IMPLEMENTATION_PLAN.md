@@ -1,7 +1,12 @@
 # Civique UI Transformation Implementation Plan
 
-**Status:** Planned — implementation has not started  
-**Program:** UX0–UX10  
+> **Document role:** Detailed screen, interaction, responsive, accessibility, and component companion to the authoritative [`../Implementation.md`](../Implementation.md). Product behavior, module scope, and current status come from the master specification and [`ACCEPTANCE_MATRIX.md`](ACCEPTANCE_MATRIX.md).
+
+> **Current design decision:** Preserve and extend the implemented Dark Green Pro system. Historical Cloudflare-theme references below describe the origin of the token work; they do not authorize another brand redesign.
+
+**Status:** Partially implemented; verification and expansion remain
+
+**Program:** UX0–UX14 companion program
 **Product:** Civique  
 **Design direction:** Exact TweakCN Cloudflare theme `cmqx9le2j000504l49jgxe1d0`  
 **Primary constraint:** Preserve all working business functionality, routes, APIs, authorization, real-time behavior, and data contracts.
@@ -925,6 +930,69 @@ After redesign, the same contract must pass. A visually complete page is not acc
 - No known critical accessibility or responsive defects remain.
 - Functionality-preservation contracts pass for every migrated route.
 
+### UX11 — RBAC, Organization, and Employee Administration
+
+**Goal:** Give authorized administrators a precise, auditable way to manage protected templates, custom roles, permissions, scopes, employees, and temporary delegation.
+
+**Deliverables:**
+
+- People and employee-detail views with designation, organization, skills, shift, availability, workload, supervisor, account state, assignments, sessions, and audit history.
+- Organization tree, protected/custom role directory, role detail, permission matrix, scope-grant editor, delegation workflow, invitations, transfers, suspensions, and separation-of-duties feedback.
+- Dense desktop tables and comparison panels with mobile-safe read/action layouts.
+
+**Acceptance:**
+
+- UI never implies permission beyond backend evaluation.
+- Reserved permissions and self-elevation are visibly and technically blocked.
+- Expiry, conflict, stale-version, denied, and audit-confirmation states are complete.
+
+### UX12 — Civique Socio and Moderation
+
+**Goal:** Deliver an explicit-consent civic feed without exposing private Report data or turning engagement into municipal authority.
+
+**Deliverables:**
+
+- `/socio` locality/category/status feed, `/socio/[postId]`, publication preview, alias setup, follow/save/support, structured `AFFECTED` corroboration, shallow comments, content reporting, blocks/mutes, and revocation.
+- Admin moderation queue, case detail, redaction/removal/lock/suspension actions, reason capture, appeal review, and ranking/provenance inspection.
+- Official status events visually separated from citizen discussion.
+
+**Acceptance:**
+
+- Only approved redacted derivatives and generalized locations render publicly.
+- Revocation removes the projection but preserves the official civic record.
+- Anonymous comments, DMs, public contact details, unrestricted media, and popularity-driven priority are absent.
+
+### UX13 — Accountability, Assets, and Predictive Intelligence
+
+**Goal:** Present accepted M18–M21 data honestly, accessibly, and with complete provenance.
+
+**Deliverables:**
+
+- Public accountability and civic-health routes with suppressed-cohort explanations and accessible tables for every chart.
+- Asset directory/map/detail/import workflow and Incident link/correction UI.
+- Prediction map/list, confidence ranges, evaluation history, model/data provenance, and operator feedback.
+
+**Acceptance:**
+
+- Every metric, score, and forecast shows definition/version, scope, freshness, uncertainty, and source.
+- Forecast failure or stale aggregates do not affect core reporting.
+
+### UX14 — Integrations, Tenant Administration, and Release Acceptance
+
+**Goal:** Complete authorized external synchronization, city provisioning, and the final multi-role production UX gate.
+
+**Deliverables:**
+
+- Integration configuration/status, signed-webhook delivery history, conflicts, reconciliation, repair, and external references.
+- Tenant/city provisioning, geography/policy/branding/provider configuration, feature flags, and bounded cross-city administration.
+- Full Hindi/English, accessibility, responsive, security, visual, and golden-flow release evidence.
+
+**Acceptance:**
+
+- Live integration controls remain disabled until authority/provider approval exists.
+- Cross-city isolation and reserved-permission behavior pass from UI through API.
+- No active route depends on legacy theme classes or false/mock controls.
+
 ## 17. Verification Strategy
 
 ### 17.1 Automated checks for every UX module
@@ -1003,13 +1071,11 @@ Mitigation: connect them to real APIs, disable them with a clear explanation, or
 
 ### One-shot replacement creates an unreviewable regression
 
-Mitigation: use UX0–UX10 review gates and keep each change small enough to test and revert independently.
+Mitigation: use UX0–UX14 review gates and keep each change small enough to test and revert independently.
 
-## 20. First Implementation Recommendation
+## 20. Current Implementation Recommendation
 
-Begin with **UX0 — Design Foundation and Safety Baseline** only.
-
-UX0 should produce the exact Cloudflare theme, font setup, core components, design-system preview, baseline screenshots, and compatibility tests. It should not redesign feature pages yet. Once UX0 is reviewed and approved, move to UX1 for the shared shell and navigation.
+Preserve the implemented UX0–UX7 work and complete its remaining lint, accessibility, responsive, and functionality-preservation evidence. The next bounded UI slice is **UX8 — Field Worker Mobile Operations**, because it is required for the P0 golden flow through `RESOLUTION_SUBMITTED`. Do not start Socio or later intelligence screens before their backend and privacy gates pass.
 
 ## 21. Definition of UI Program Completion
 
@@ -1037,4 +1103,3 @@ The Civique UI transformation is complete only when:
 - shadcn/ui Next.js installation: <https://ui.shadcn.com/docs/installation/next>
 - shadcn/ui theming: <https://ui.shadcn.com/docs/theming>
 - shadcn/ui registry: <https://ui.shadcn.com/docs/registry>
-

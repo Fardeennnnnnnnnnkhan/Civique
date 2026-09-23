@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { auditHash, legacyAuditHash, verifyAuditChain } from './audit';
+const first = { id: 'a', incidentId: 'incident', eventType: 'OPENED', actor: 'system', previousHash: '0'.repeat(64), metadata: { b: 2, a: 1 }, chainSequence: 1n, hashVersion: 'm17-v1' };
+const firstHash = auditHash(first);
+const second = { id: 'b', incidentId: 'incident', eventType: 'ASSIGNED', actor: 'official', previousHash: firstHash, metadata: { reason: 'route' }, chainSequence: 2n, hashVersion: 'm17-v1' };
+const secondHash = auditHash(second);
+assert.deepEqual(verifyAuditChain([{ ...first, currentHash: firstHash }, { ...second, currentHash: secondHash }]), { valid: true, checked: 2 });
+assert.equal(verifyAuditChain([{ ...first, currentHash: 'tampered' }]).valid, false);
+const legacy = { id: 'legacy', incidentId: 'incident', eventType: 'CREATED', actor: 'system', previousHash: '0'.repeat(64), metadata: { reason: 'legacy' }, chainSequence: 0n, hashVersion: 'legacy-v1' };
+assert.equal(verifyAuditChain([{ ...legacy, currentHash: legacyAuditHash(legacy) }]).valid, true);
+assert.equal(verifyAuditChain([{ ...first, currentHash: firstHash }], { headHash: 'wrong', headSequence: 1n }).valid, false);
+console.log('Audit canonical hashing and integrity tests passed.');

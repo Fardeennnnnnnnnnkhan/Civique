@@ -52,6 +52,42 @@ enum JobStatus {
   DEAD_LETTER
 }
 
+enum AuthTokenPurpose {
+  INVITATION
+  PASSWORD_RESET
+}
+
+enum SecurityEventType {
+  LOGIN_SUCCESS
+  LOGIN_FAILURE
+  MFA_ENROLLMENT_STARTED
+  MFA_ENROLLMENT_COMPLETED
+  MFA_FAILURE
+  MFA_SUCCESS
+  REFRESH_REPLAY
+  LOGOUT
+  PASSWORD_RESET
+  ACCOUNT_SUSPENDED
+}
+
+enum MediaAssetKind {
+  ORIGINAL
+  NORMALIZED
+  RESOLUTION_ORIGINAL
+  RESOLUTION_NORMALIZED
+}
+
+enum TimelineVisibility {
+  CITIZEN
+  OFFICIAL
+  INTERNAL
+}
+
+enum ResolutionDecisionAction {
+  CONFIRM
+  DISPUTE
+}
+
 model User {
   id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email             String?  @unique
@@ -63,9 +99,13 @@ model User {
   wardId            String?  @map("ward_id") @db.Uuid
   departmentId      String?  @map("department_id") @db.Uuid
   active            Boolean  @default(true)
+  mfaSecretEncrypted String?  @map("mfa_secret_encrypted")
+  mfaEnabled        Boolean  @default(false) @map("mfa_enabled")
+  mfaEnrolledAt     DateTime? @map("mfa_enrolled_at")
   notificationInApp Boolean  @default(true) @map("notification_in_app")
   notificationEmail Boolean  @default(true) @map("notification_email")
   notificationSms   Boolean  @default(true) @map("notification_sms")
+  oversightNotifications Boolean @default(false) @map("oversight_notifications")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
@@ -75,6 +115,7 @@ model User {
   ward                    Ward?                   @relation(fields: [wardId], references: [id], onDelete: SetNull)
   reports                 Report[]                @relation("Submitter")
   assignedIncidents       Incident[]              @relation("AssignedTo")
+  triageOwnedIncidents    Incident[]              @relation("TriageOwner")
   createdIncidents        Incident[]              @relation("AssignedBy")
   resolvedIncidents       Incident[]              @relation("Worker")
   notifications           Notification[]
@@ -83,8 +124,55 @@ model User {
   workOrders              WorkOrder[]
   assignmentHistory       AssignmentHistory[]
   ResolutionSubmission    ResolutionSubmission[]
+  triageAssignments       TriageAssignment[]      @relation("TriageAssignee")
+  triageAssignmentsMade   TriageAssignment[]      @relation("TriageAssigner")
+  resolutionDecisions     ResolutionDecision[]
+  authActionTokens        AuthActionToken[]         @relation("AuthTokenUser")
+  issuedAuthActionTokens  AuthActionToken[]         @relation("AuthTokenIssuer")
+  securityEvents           SecurityEvent[]
+  roleAssignments          UserRoleAssignment[] @relation("RoleAssignmentUser")
+  approvedRoleAssignments  UserRoleAssignment[] @relation("RoleAssignmentApprover")
+  scopeGrants              ScopeGrant[]
+  delegationsGiven         Delegation[] @relation("DelegationGrantor")
+  delegationsReceived      Delegation[] @relation("DelegationDelegatee")
+  employmentProfile        EmploymentProfile?
 
   @@map("users")
+}
+
+model SecurityEvent {
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String?           @map("user_id") @db.Uuid
+  type        SecurityEventType
+  success     Boolean           @default(false)
+  ipAddress   String?           @map("ip_address")
+  userAgent   String?           @map("user_agent")
+  requestId   String?           @map("request_id")
+  metadata    Json?
+  createdAt   DateTime          @default(now()) @map("created_at")
+  user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+  @@map("security_events")
+}
+
+model AuthActionToken {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  purpose     AuthTokenPurpose
+  tokenHash   String           @unique @map("token_hash")
+  expiresAt   DateTime         @map("expires_at")
+  usedAt      DateTime?        @map("used_at")
+  revokedAt   DateTime?        @map("revoked_at")
+  createdById String?          @map("created_by_id") @db.Uuid
+  createdAt   DateTime         @default(now()) @map("created_at")
+  user        User             @relation("AuthTokenUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy   User?            @relation("AuthTokenIssuer", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([userId, purpose, expiresAt])
+  @@index([createdById])
+  @@map("auth_action_tokens")
 }
 
 model UserSession {
@@ -110,6 +198,7 @@ model Report {
   submitterRef       String?   @map("submitter_ref") @db.Uuid
   anonymousToken     String?   @map("anonymous_token")
   photoUrl           String    @map("photo_url")
+  title              String
   description        String?
   voiceTranscript    String?   @map("voice_transcript")
   categorySuggested  String?   @map("category_suggested")
@@ -120,6 +209,9 @@ model Report {
   captureMethod      String    @default("CAMERA_LIVE") @map("capture_method")
   deviceTimestamp    DateTime? @map("device_timestamp")
   gpsTimestamp       DateTime? @map("gps_timestamp")
+  consentVersion     String    @map("consent_version")
+  consentedAt        DateTime  @map("consented_at")
+  submissionStatus   String    @default("RECEIVED") @map("submission_status")
   imageHash          String?   @map("image_hash")
   citizenName        String?   @map("citizen_name")
   citizenPhone       String?   @map("citizen_phone")
@@ -133,6 +225,7 @@ model Report {
   submitter   User?        @relation("Submitter", fields: [submitterRef], references: [id], onDelete: SetNull)
   mediaAssets MediaAsset[]
   aiAnalyses  AiAnalysis[]
+  timelineEvents IncidentTimelineEvent[]
 
   @@index([incidentId])
   @@index([createdAt])
@@ -148,12 +241,19 @@ model MediaAsset {
   byteSize       Int       @map("byte_size")
   width          Int?
   height         Int?
+  kind           MediaAssetKind @default(ORIGINAL)
+  sourceAssetId  String?        @map("source_asset_id") @db.Uuid
+  normalizedAt   DateTime?      @map("normalized_at")
   isPrivate      Boolean   @default(true) @map("is_private")
   retentionUntil DateTime? @map("retention_until")
   createdAt      DateTime  @default(now()) @map("created_at")
   report         Report    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  sourceAsset    MediaAsset? @relation("MediaDerivative", fields: [sourceAssetId], references: [id], onDelete: SetNull)
+  derivatives    MediaAsset[] @relation("MediaDerivative")
 
   @@index([reportId])
+  @@index([reportId, kind])
+  @@index([sourceAssetId])
   @@index([sha256])
   @@map("media_assets")
 }
@@ -169,6 +269,12 @@ model AiAnalysis {
   confidence    Decimal? @db.Decimal(5, 4)
   result        Json
   status        String   @default("PENDING")
+  requestHash   String?  @map("request_hash")
+  latencyMs     Int?     @map("latency_ms")
+  promptTokens  Int?     @map("prompt_tokens")
+  completionTokens Int?  @map("completion_tokens")
+  failureCode   String?  @map("failure_code")
+  completedAt   DateTime? @map("completed_at")
   createdAt     DateTime @default(now()) @map("created_at")
   report        Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
@@ -198,6 +304,12 @@ model Incident {
   slaBreached      Boolean        @default(false) @map("sla_breached")
   isPublic         Boolean        @default(true) @map("is_public")
   assignedTo       String?        @map("assigned_to") @db.Uuid
+  triageOwnerId    String?        @map("triage_owner_id") @db.Uuid
+  triageAssignedAt DateTime?      @map("triage_assigned_at")
+  triageAssignmentReason String?  @map("triage_assignment_reason")
+  triageAssignmentVersion Int?    @map("triage_assignment_version")
+  unassignedReason String?        @map("unassigned_reason")
+  citizenConfirmationDeadline DateTime? @map("citizen_confirmation_deadline")
   assignedBy       String?        @map("assigned_by") @db.Uuid
   assignedAt       DateTime?      @map("assigned_at")
   startedAt        DateTime?      @map("started_at")
@@ -212,6 +324,7 @@ model Incident {
   reports               Report[]
   worker                User?                  @relation("Worker", fields: [workerRef], references: [id])
   assignee              User?                  @relation("AssignedTo", fields: [assignedTo], references: [id])
+  triageOwner           User?                  @relation("TriageOwner", fields: [triageOwnerId], references: [id], onDelete: SetNull)
   creator               User?                  @relation("AssignedBy", fields: [assignedBy], references: [id])
   auditLogs             AuditLog[]
   notifications         Notification[]
@@ -219,12 +332,17 @@ model Incident {
   workOrder             WorkOrder?
   assignmentHistory     AssignmentHistory[]
   resolutionSubmissions ResolutionSubmission[]
+  triageAssignments     TriageAssignment[]
+  timelineEvents        IncidentTimelineEvent[]
+  resolutionDecisions   ResolutionDecision[]
+  reviewTasks           ReviewTask[]
   slaState              IncidentSla?
   slaEvents             SlaEscalationEvent[]
 
   @@index([status, createdAt])
   @@index([cityId, status])
   @@index([wardId, status])
+  @@index([triageOwnerId, status])
   @@index([departmentId, status])
   @@map("incidents")
 }
@@ -382,6 +500,9 @@ model RoutingDecision {
   departmentId         String?      @map("department_id") @db.Uuid
   previousDepartmentId String?      @map("previous_department_id") @db.Uuid
   reason               String
+  ruleVersion          Int          @default(1) @map("rule_version")
+  fallbackUsed         Boolean      @default(false) @map("fallback_used")
+  actorId              String?      @map("actor_id") @db.Uuid
   createdAt            DateTime     @default(now()) @map("created_at")
   incident             Incident     @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   rule                 RoutingRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
@@ -428,19 +549,103 @@ model ResolutionSubmission {
   incidentId         String   @map("incident_id") @db.Uuid
   workerId           String   @map("worker_id") @db.Uuid
   evidencePath       String   @map("evidence_path")
+  evidenceOriginalPath String? @map("evidence_original_path")
   evidenceSha256     String   @map("evidence_sha256")
+  evidenceMimeType   String?  @map("evidence_mime_type")
+  evidenceWidth      Int?     @map("evidence_width")
+  evidenceHeight     Int?     @map("evidence_height")
   notes              String
   captureAt          DateTime @map("capture_at")
   latitude           Float?
   longitude          Float?
   submittedAt        DateTime @default(now()) @map("submitted_at")
   verificationStatus String   @default("PENDING") @map("verification_status")
+  verificationResult Json?    @map("verification_result")
+  verifiedAt         DateTime? @map("verified_at")
+  idempotencyKey     String?   @unique @map("idempotency_key")
   incident           Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   worker             User     @relation(fields: [workerId], references: [id], onDelete: Restrict)
 
   @@unique([incidentId, evidenceSha256])
   @@index([incidentId, submittedAt])
   @@map("resolution_submissions")
+}
+
+model TriageAssignment {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incidentId  String   @map("incident_id") @db.Uuid
+  officerId   String?  @map("officer_id") @db.Uuid
+  assignedById String? @map("assigned_by_id") @db.Uuid
+  reason      String
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at")
+  incident    Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  officer     User?    @relation("TriageAssignee", fields: [officerId], references: [id], onDelete: SetNull)
+  assignedBy  User?    @relation("TriageAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@index([incidentId, createdAt])
+  @@index([officerId, createdAt])
+  @@map("triage_assignments")
+}
+
+model IncidentTimelineEvent {
+  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sequence      BigInt             @unique @default(autoincrement())
+  incidentId    String             @map("incident_id") @db.Uuid
+  reportId      String?            @map("report_id") @db.Uuid
+  eventType     String             @map("event_type")
+  lifecycleState IncidentStatus?   @map("lifecycle_state")
+  actorRole     UserRole?          @map("actor_role")
+  actorLabel    String?            @map("actor_label")
+  metadata      Json?
+  visibility    TimelineVisibility @default(CITIZEN)
+  correlationId String             @unique @map("correlation_id")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  incident      Incident           @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  report        Report?            @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@index([incidentId, sequence])
+  @@map("incident_timeline_events")
+}
+
+model ResolutionDecision {
+  id             String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incidentId     String                   @map("incident_id") @db.Uuid
+  citizenId      String                   @map("citizen_id") @db.Uuid
+  action         ResolutionDecisionAction
+  notes          String?
+  idempotencyKey String                   @unique @map("idempotency_key")
+  createdAt      DateTime                 @default(now()) @map("created_at")
+  incident       Incident                 @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  citizen        User                     @relation(fields: [citizenId], references: [id], onDelete: Restrict)
+
+  @@index([incidentId, createdAt])
+  @@map("resolution_decisions")
+}
+
+model ServiceHeartbeat {
+  service   String   @id
+  instance  String
+  metadata  Json?
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("service_heartbeats")
+}
+
+model ReviewTask {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incidentId  String   @map("incident_id") @db.Uuid
+  type        String
+  status      String   @default("OPEN")
+  assignedToId String? @map("assigned_to_id") @db.Uuid
+  dueAt       DateTime @map("due_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+  incident    Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@unique([incidentId, type])
+  @@index([status, dueAt])
+  @@map("review_tasks")
 }
 
 model SlaPolicy {
@@ -474,6 +679,7 @@ model IncidentSla {
   deadlineAt      DateTime             @map("deadline_at")
   pausedAt        DateTime?            @map("paused_at")
   pausedReason    String?              @map("paused_reason")
+  pausedSeconds   Int                  @default(0) @map("paused_seconds")
   currentTier     Int                  @default(0) @map("current_tier")
   lastEvaluatedAt DateTime?            @map("last_evaluated_at")
   createdAt       DateTime             @default(now()) @map("created_at")
@@ -512,6 +718,8 @@ model AuditLog {
   currentHash  String   @map("current_hash")
   metadata     Json?
   timestamp    DateTime @default(now())
+  chainSequence BigInt   @map("chain_sequence")
+  hashVersion  String   @default("legacy-v1") @map("hash_version")
 
   // Relations
   incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
@@ -527,6 +735,7 @@ model Notification {
   type       String // e.g. "INCIDENT_ASSIGNED", "INCIDENT_STATUS_CHANGED", "SLA_BREACH", "RESOLUTION_SUBMITTED"
   incidentId String?  @map("incident_id") @db.Uuid
   read       Boolean  @default(false)
+  idempotencyKey String? @unique @map("idempotency_key")
   createdAt  DateTime @default(now()) @map("created_at")
 
   // Relations
@@ -559,6 +768,8 @@ model DeliveryAttempt {
   attemptCount   Int          @default(0) @map("attempt_count")
   lastError      String?      @map("last_error")
   sentAt         DateTime?    @map("sent_at")
+  nextAttemptAt  DateTime?    @map("next_attempt_at")
+  providerMessageId String?   @map("provider_message_id")
   createdAt      DateTime     @default(now()) @map("created_at")
   notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
 
@@ -599,4 +810,132 @@ model OutboxEvent {
 
   @@index([publishedAt, createdAt])
   @@map("outbox_events")
+}
+
+model RealtimeEvent {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sequence   BigInt   @unique @default(autoincrement())
+  eventType  String   @map("event_type")
+  entityId   String   @map("entity_id") @db.Uuid
+  payload    Json
+  audienceUserId String? @map("audience_user_id") @db.Uuid
+  isPublic   Boolean  @default(false) @map("is_public")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([entityId, sequence])
+  @@index([audienceUserId, sequence])
+  @@map("realtime_events")
+}
+
+model Permission {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key         String   @unique
+  description String
+  reserved    Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  rolePermissions RolePermission[]
+  @@map("permissions")
+}
+
+model Role {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  key         String
+  cityId      String?  @map("city_id") @db.Uuid
+  protected   Boolean  @default(false)
+  active      Boolean  @default(true)
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  permissions RolePermission[]
+  assignments UserRoleAssignment[]
+  @@unique([key, cityId])
+  @@index([cityId, active])
+  @@map("roles")
+}
+
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRoleAssignment {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  roleId     String   @map("role_id") @db.Uuid
+  approvedById String? @map("approved_by_id") @db.Uuid
+  status     String   @default("ACTIVE")
+  startsAt   DateTime @default(now()) @map("starts_at")
+  expiresAt  DateTime? @map("expires_at")
+  reason     String
+  createdAt  DateTime @default(now()) @map("created_at")
+  user User @relation("RoleAssignmentUser", fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  approvedBy User? @relation("RoleAssignmentApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  @@index([userId, status, expiresAt])
+  @@map("user_role_assignments")
+}
+
+model ScopeGrant {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  scopeType  String   @map("scope_type")
+  scopeId    String   @map("scope_id") @db.Uuid
+  startsAt   DateTime @default(now()) @map("starts_at")
+  expiresAt  DateTime? @map("expires_at")
+  reason     String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, scopeType, scopeId])
+  @@map("scope_grants")
+}
+
+model Delegation {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  grantorId   String   @map("grantor_id") @db.Uuid
+  delegateeId String   @map("delegatee_id") @db.Uuid
+  permission  String
+  scopeType   String?  @map("scope_type")
+  scopeId     String?  @map("scope_id") @db.Uuid
+  startsAt    DateTime @map("starts_at")
+  expiresAt   DateTime @map("expires_at")
+  revokedAt   DateTime? @map("revoked_at")
+  reason      String
+  grantor User @relation("DelegationGrantor", fields: [grantorId], references: [id], onDelete: Cascade)
+  delegatee User @relation("DelegationDelegatee", fields: [delegateeId], references: [id], onDelete: Cascade)
+  @@index([delegateeId, permission, startsAt, expiresAt])
+  @@map("delegations")
+}
+
+model OrganizationUnit {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  unitType  String   @map("unit_type")
+  cityId    String?  @map("city_id") @db.Uuid
+  parentId  String?  @map("parent_id") @db.Uuid
+  active    Boolean  @default(true)
+  parent    OrganizationUnit? @relation("OrgTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  OrganizationUnit[] @relation("OrgTree")
+  @@index([cityId, unitType, active])
+  @@map("organization_units")
+}
+
+model EmploymentProfile {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String   @unique @map("user_id") @db.Uuid
+  employeeNumber String?  @unique @map("employee_number")
+  designation    String?
+  skills         String[] @default([])
+  shift          String?
+  availability   String   @default("AVAILABLE")
+  supervisorId   String?  @map("supervisor_id") @db.Uuid
+  emergencyPhone String?  @map("emergency_phone")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("employment_profiles")
 }

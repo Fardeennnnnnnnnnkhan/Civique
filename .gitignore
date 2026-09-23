@@ -18,9 +18,15 @@ build/
 .env.test.local
 .env.production.local
 .env.*
+!.env.example
 apps/web/.env
 services/api/.env
 services/worker/.env
+
+# Python bytecode and test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
 
 # IDEs and Editors
 .idea/

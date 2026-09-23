@@ -18,6 +18,12 @@ const getSupabaseUrl = (): string => {
 };
 
 export const supabaseUrl = getSupabaseUrl();
-export const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
+export const supabaseServerKey = process.env.SUPABASE_SERVICE_ROLE_KEY || (process.env.NODE_ENV !== 'production' ? process.env.SUPABASE_ANON_KEY || '' : '');
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseServerKey, { auth: { persistSession: false, autoRefreshToken: false } });
+
+export async function createSignedMediaUrl(storagePath: string, expiresInSeconds = 300) {
+  const { data, error } = await supabase.storage.from('report-images').createSignedUrl(storagePath, expiresInSeconds);
+  if (error || !data?.signedUrl) throw new Error('SIGNED_MEDIA_UNAVAILABLE');
+  return data.signedUrl;
+}

@@ -1,19 +1,26 @@
 import { Router, Response } from 'express';
 import { prisma } from '../db';
 import { AuthenticatedRequest, authenticateJWT } from '../middleware/auth';
+import { notificationLink } from '../services/notificationPolicy';
 
 const router = Router();
 
 router.get('/preferences', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
   const preferences = await (prisma as any).notificationPreference.upsert({ where: { userId: req.user!.id }, update: {}, create: { userId: req.user!.id } });
-  res.json({ success: true, data: { preferences } });
+  const oversight = await prisma.$queryRaw<Array<{ oversight_notifications: boolean }>>`SELECT oversight_notifications FROM users WHERE id=${req.user!.id}::uuid`;
+  res.json({ success: true, data: { preferences: { ...preferences, oversight: oversight[0]?.oversight_notifications || false } } });
 });
 
 router.patch('/preferences', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
+  if (typeof req.body.oversight === 'boolean' && req.user!.role !== 'SUPER_ADMIN') return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'Only super administrators can configure platform oversight.' } });
+  if (req.body.email === true || req.body.sms === true) return res.status(409).json({ success: false, error: { code: 'CHANNEL_NOT_AVAILABLE', message: 'Email and SMS delivery are not configured for this release.' } });
   const data: Record<string, boolean> = {};
   for (const key of ['inApp', 'email', 'sms']) if (typeof req.body[key] === 'boolean') data[key] = req.body[key];
   const preferences = await (prisma as any).notificationPreference.upsert({ where: { userId: req.user!.id }, update: data, create: { userId: req.user!.id, ...data } });
-  res.json({ success: true, data: { preferences } });
+  if (typeof req.body.oversight === 'boolean') {
+    await prisma.$executeRaw`UPDATE users SET oversight_notifications=${req.body.oversight} WHERE id=${req.user!.id}::uuid`;
+  }
+  res.json({ success: true, data: { preferences: { ...preferences, oversight: req.user!.role === 'SUPER_ADMIN' ? Boolean(req.body.oversight) : false } } });
 });
 
 /**
@@ -24,9 +31,13 @@ router.get('/', authenticateJWT, async (req: AuthenticatedRequest, res: Response
   try {
     const actor = req.user!;
 
+    const limitValue = Number(req.query.limit); const limit = Number.isFinite(limitValue) ? Math.min(Math.max(Math.trunc(limitValue), 1), 50) : 20;
+    const cursor = typeof req.query.cursor === 'string' && req.query.cursor ? req.query.cursor : undefined;
     const notifications = await prisma.notification.findMany({
       where: { userId: actor.id },
       orderBy: { createdAt: 'desc' },
+      take: limit + 1,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
       include: {
         incident: {
           select: {
@@ -39,10 +50,16 @@ router.get('/', authenticateJWT, async (req: AuthenticatedRequest, res: Response
       }
     });
 
+    const hasMore = notifications.length > limit; const page = notifications.slice(0, limit); const unreadCount = await prisma.notification.count({ where: { userId: actor.id, read: false } });
     return res.json({
       success: true,
       data: {
-        notifications
+        notifications: page.map((notification) => ({
+          ...notification,
+          link: notificationLink(notification.type, notification.incidentId),
+        })),
+        unreadCount,
+        pagination: { limit, hasMore, nextCursor: hasMore ? page[page.length - 1]?.id ?? null : null }
       }
     });
   } catch (error: any) {
@@ -55,6 +72,11 @@ router.get('/', authenticateJWT, async (req: AuthenticatedRequest, res: Response
       }
     });
   }
+});
+
+router.get('/unread-count', authenticateJWT, async (req: AuthenticatedRequest, res: Response) => {
+  const unreadCount = await prisma.notification.count({ where: { userId: req.user!.id, read: false } });
+  return res.json({ success: true, data: { unreadCount } });
 });
 
 /**

@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { canAdministrativeClose, evaluateResolutionEvidence, isWithinAppealWindow } from './resolutionVerificationPolicy';
+assert.equal(evaluateResolutionEvidence({ aiOutcome: 'VERIFIED', aiConfidence: 0.9, gpsWithinTolerance: true, provenanceValid: true, beforeAfterRelevant: true }).outcome, 'VERIFIED');
+assert.equal(evaluateResolutionEvidence({ aiOutcome: 'VERIFIED', aiConfidence: 0.9, gpsWithinTolerance: false, provenanceValid: true, beforeAfterRelevant: true }).outcome, 'REJECTED');
+assert.equal(evaluateResolutionEvidence({ aiOutcome: 'REVIEW_REQUIRED', aiConfidence: 0.5, gpsWithinTolerance: true, provenanceValid: true, beforeAfterRelevant: true }).outcome, 'REVIEW_REQUIRED');
+const now = new Date('2026-09-21T12:00:00.000Z');
+assert.equal(canAdministrativeClose({ status: 'CITIZEN_CONFIRMATION', confirmationDeadline: '2026-09-21T11:59:00.000Z', verificationStatus: 'VERIFIED_BY_OFFICIAL', now }), true);
+assert.equal(canAdministrativeClose({ status: 'CITIZEN_CONFIRMATION', confirmationDeadline: '2026-09-21T12:01:00.000Z', verificationStatus: 'VERIFIED_BY_OFFICIAL', now }), false);
+assert.equal(canAdministrativeClose({ status: 'CITIZEN_CONFIRMATION', confirmationDeadline: '2026-09-21T11:59:00.000Z', verificationStatus: 'PENDING', now }), false);
+assert.equal(isWithinAppealWindow('2026-09-15T12:00:00.000Z', now), true);
+assert.equal(isWithinAppealWindow('2026-09-13T11:59:59.000Z', now), false);
+console.log('Resolution verification policy tests passed.');

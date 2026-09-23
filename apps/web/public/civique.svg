@@ -1,0 +1,47 @@
+<svg width="64" height="64" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="civique-forest-grad" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+      <stop stopColor="#143527" />
+      <stop offset="1" stopColor="#0e271c" />
+    </linearGradient>
+    <linearGradient id="civique-emerald-grad" x1="16" y1="16" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+      <stop stopColor="#34d399" />
+      <stop offset="0.6" stopColor="#10b981" />
+      <stop offset="1" stopColor="#143527" />
+    </linearGradient>
+  </defs>
+  <path
+    d="M24 4L39 10.5V23C39 32.5 32.5 40.8 24 44C15.5 40.8 9 32.5 9 23V10.5L24 4Z"
+    fill="url(#civique-forest-grad)"
+  />
+  <path
+    d="M24 7.2L36.2 12.5V22.6C36.2 30.4 30.9 37.3 24 40.1C17.1 37.3 11.8 30.4 11.8 22.6V12.5L24 7.2Z"
+    stroke="#22543d"
+    strokeWidth="1.2"
+    strokeOpacity="0.8"
+  />
+  <path
+    d="M29 18C27.5 16.5 25.4 15.5 23 15.5C18.3 15.5 14.5 19.3 14.5 24C14.5 28.7 18.3 32.5 23 32.5C25.4 32.5 27.5 31.5 29 30"
+    stroke="#ffffff"
+    strokeWidth="2.8"
+    strokeLinecap="round"
+  />
+  <circle
+    cx="28"
+    cy="24"
+    r="4.2"
+    fill="url(#civique-emerald-grad)"
+  />
+  <circle
+    cx="28"
+    cy="24"
+    r="2"
+    fill="#0e271c"
+  />
+  <circle
+    cx="33"
+    cy="18"
+    r="1.8"
+    fill="#34d399"
+  />
+</svg>

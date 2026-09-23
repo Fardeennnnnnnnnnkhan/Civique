@@ -17,12 +17,22 @@ export async function rotateSession(token: string): Promise<{ userId: string; to
     return null;
   }
   const next = crypto.randomBytes(48).toString('base64url');
-  const created = await prisma.$transaction(async (tx) => {
-    const replacement = await tx.userSession.create({ data: { userId: session.userId, tokenHash: hashToken(next), familyId: session.familyId, expiresAt: new Date(Date.now() + REFRESH_DAYS * 86400000) } });
-    await tx.userSession.update({ where: { id: session.id }, data: { revokedAt: new Date(), replacedById: replacement.id, lastUsedAt: new Date() } });
-    return replacement;
-  });
-  return { userId: created.userId, token: next };
+  try {
+    const created = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.userSession.updateMany({ where: { id: session.id, revokedAt: null }, data: { revokedAt: new Date(), lastUsedAt: new Date() } });
+      if (claimed.count !== 1) throw new Error('SESSION_ALREADY_ROTATED');
+      const replacement = await tx.userSession.create({ data: { userId: session.userId, tokenHash: hashToken(next), familyId: session.familyId, expiresAt: new Date(Date.now() + REFRESH_DAYS * 86400000) } });
+      await tx.userSession.update({ where: { id: session.id }, data: { replacedById: replacement.id } });
+      return replacement;
+    });
+    return { userId: created.userId, token: next };
+  } catch (error) {
+    if (error instanceof Error && error.message === 'SESSION_ALREADY_ROTATED') {
+      await prisma.userSession.updateMany({ where: { familyId: session.familyId, revokedAt: null }, data: { revokedAt: new Date() } });
+      return null;
+    }
+    throw error;
+  }
 }
 export async function revokeSession(token: string): Promise<void> { await prisma.userSession.updateMany({ where: { tokenHash: hashToken(token), revokedAt: null }, data: { revokedAt: new Date() } }); }
 export async function revokeAllSessions(userId: string): Promise<void> { await prisma.userSession.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }); }
@@ -35,6 +45,11 @@ export function setAuthCookies(res: { setHeader(name: string, value: string | st
     `civique_csrf=${csrf}; Path=/; Max-Age=900; SameSite=Lax${secure}`,
   ]);
 }
+export function setCsrfCookie(res: { setHeader(name: string, value: string | string[]): void }) {
+  const csrf = crypto.randomBytes(24).toString('base64url');
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `civique_csrf=${csrf}; Path=/; Max-Age=900; SameSite=Lax${secure}`);
+}
 export function setSessionCookies(res: { setHeader(name: string, value: string | string[]): void }, accessToken: string, refreshToken: string) {
   const csrf = crypto.randomBytes(24).toString('base64url');
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
@@ -42,5 +57,14 @@ export function setSessionCookies(res: { setHeader(name: string, value: string |
     `civique_access=${accessToken}; HttpOnly; Path=/; Max-Age=900; SameSite=Lax${secure}`,
     `civique_refresh=${refreshToken}; HttpOnly; Path=/api/v1/auth; Max-Age=${REFRESH_DAYS * 86400}; SameSite=Lax${secure}`,
     `civique_csrf=${csrf}; Path=/; Max-Age=900; SameSite=Lax${secure}`,
+  ]);
+}
+
+export function clearSessionCookies(res: { setHeader(name: string, value: string | string[]): void }) {
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  res.setHeader('Set-Cookie', [
+    `civique_access=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure}`,
+    `civique_refresh=; HttpOnly; Path=/api/v1/auth; Max-Age=0; SameSite=Lax${secure}`,
+    `civique_csrf=; Path=/; Max-Age=0; SameSite=Lax${secure}`,
   ]);
 }

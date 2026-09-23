@@ -3,19 +3,27 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { 
-  FiMapPin, 
-  FiClock, 
-  FiCheckCircle, 
-  FiShield, 
-  FiImage, 
+import {
+  FiMapPin,
+  FiClock,
+  FiCheckCircle,
+  FiShield,
   FiArrowLeft,
   FiActivity,
-  FiInfo,
-  FiAlertCircle
+  FiAlertCircle,
+  FiZap,
+  FiCheck,
+  FiCopy,
+  FiLayers,
+  FiCamera,
+  FiAlertTriangle
+  ,FiShare2
 } from 'react-icons/fi';
-import CitizenHeader from '../../components/CitizenHeader';
-import Shell from '../../components/Shell';
+import Shell from '@/app/components/Shell';
+import LoadingState from '@/app/components/LoadingState';
+import { apiFetch, logout } from '@/lib/api/client';
+import { StatusBadge, PriorityBadge } from '@/components/ui';
+import CitizenDecisionModal from '@/components/civique/CitizenDecisionModal';
 
 interface CaseUpdate {
   time: string;
@@ -29,85 +37,104 @@ export default function CitizenCaseDetailPage() {
   const router = useRouter();
   const id = params.id as string;
   const reportMapRef = useRef<any>(null);
-  const LRef = useRef<any>(null);
 
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<{ id: string; email: string; role: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [report, setReport] = useState<any | null>(null);
   const [updates, setUpdates] = useState<CaseUpdate[]>([]);
+  const [copied, setCopied] = useState(false);
 
-  const getApiUrl = (path: string) => {
-    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
-    const cleanBase = base.endsWith('/api/v1') ? base : `${base}/api/v1`;
-    return `${cleanBase}${path}`;
-  };
+  // Decision Modal State
+  const [decisionModalOpen, setDecisionModalOpen] = useState(false);
+  const [decisionAction, setDecisionAction] = useState<'CONFIRM' | 'DISPUTE'>('CONFIRM');
+  const [decisionSuccess, setDecisionSuccess] = useState('');
+  const [appealOpen, setAppealOpen] = useState(false);
+  const [appealReason, setAppealReason] = useState('');
+  const [appealBusy, setAppealBusy] = useState(false);
+  const [socioOpen, setSocioOpen] = useState(false);
+  const [socioAlias, setSocioAlias] = useState('');
+  const [socioBusy, setSocioBusy] = useState(false);
 
-  const handleLogout = () => {
-    localStorage.clear();
+  const handleLogout = async () => {
+    try {
+      localStorage.removeItem('civique_user');
+    } catch {}
+    await logout().catch(() => undefined);
+    setUser(null);
     router.push('/signin');
   };
 
-  useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    const storedUser = localStorage.getItem('user');
-    if (!token || !storedUser) {
-      router.push('/signin');
-      return;
-    }
-    setUser(JSON.parse(storedUser));
+  const submitAppeal = async () => {
+    if (appealReason.trim().length < 10) return setErrorMsg('Please explain what remains unresolved in at least 10 characters.');
+    setAppealBusy(true);
+    try {
+      await apiFetch(`/incidents/${id}/appeal`, { method: 'POST', body: JSON.stringify({ reason: appealReason.trim() }) });
+      setDecisionSuccess('Your appeal was recorded and the incident has been reopened for reassessment.');
+      setAppealOpen(false); setAppealReason(''); loadData();
+    } catch (error) { setErrorMsg(error instanceof Error ? error.message : 'Unable to submit the appeal.'); }
+    finally { setAppealBusy(false); }
+  };
 
-    fetch(getApiUrl(`/reports/${id}`), {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(resData => {
-        if (resData.success && resData.report) {
+  const publishToSocio = async () => {
+    if (socioAlias.trim().length < 3) return setErrorMsg('Choose a public alias with at least three characters.');
+    setSocioBusy(true);
+    try { const result = await apiFetch<any>('/socio/publish', { method: 'POST', body: JSON.stringify({ reportId: id, alias: socioAlias.trim(), consentVersion: 'socio-v1' }) }); setDecisionSuccess('Your report was published to Civique Socio with a redacted location and public alias.'); setSocioOpen(false); setSocioAlias(''); if (result.post?.id) router.push(`/socio/${result.post.id}`); } catch (error) { setErrorMsg(error instanceof Error ? error.message : 'Unable to publish this report.'); } finally { setSocioBusy(false); }
+  };
+
+  const loadData = () => {
+    setLoading(true);
+    setErrorMsg('');
+
+    Promise.all([
+      apiFetch<{ report?: any }>(`/reports/${id}`),
+      apiFetch<{ events?: any[] }>(`/reports/${id}/timeline`),
+    ] as const)
+      .then(([resData, timelineData]) => {
+        if (resData.report) {
           const rep = resData.report;
           setReport(rep);
 
-          // Construct timeline updates
-          const timeline: CaseUpdate[] = [
-            { time: new Date(rep.createdAt).toLocaleDateString(), title: 'Report Submitted', desc: 'Grievance recorded in system.', completed: true }
-          ];
+          const eventsList = (timelineData.events || []).map((event: any) => ({
+            time: new Date(event.createdAt).toLocaleDateString('en-IN', {
+              day: 'numeric',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+            title: String(event.eventType).replaceAll('_', ' '),
+            desc: event.actorLabel
+              ? `Logged by ${event.actorLabel} · State: ${event.lifecycleState || 'Recorded'}`
+              : event.lifecycleState
+              ? `Incident state: ${event.lifecycleState}`
+              : 'Lifecycle milestone recorded',
+            completed: true,
+          }));
 
-          if (rep.incident) {
-            const inc = rep.incident;
-            timeline.push({ time: new Date(inc.createdAt).toLocaleDateString(), title: 'Incident Created', desc: 'Case promoted to active queue.', completed: true });
-            
-            if (inc.status === 'ASSIGNED' || inc.status === 'IN_PROGRESS' || inc.status === 'RESOLVED') {
-              timeline.push({ time: 'Completed', title: 'Crew Assigned', desc: 'Dispatched maintenance workers.', completed: true });
-            } else {
-              timeline.push({ time: 'Pending', title: 'Crew Assignment', desc: 'Awaiting ward officer allocation.', completed: false });
-            }
-
-            if (inc.status === 'IN_PROGRESS' || inc.status === 'RESOLVED') {
-              timeline.push({ time: 'Active', title: 'Work In Progress', desc: 'Maintenance crew on-site patching repairs.', completed: true });
-            } else {
-              timeline.push({ time: 'Pending', title: 'Work In Progress', desc: 'Crew work pending.', completed: false });
-            }
-
-            if (inc.status === 'RESOLVED') {
-              timeline.push({ time: new Date(inc.resolvedAt).toLocaleDateString(), title: 'Case Resolved', desc: 'Verified and closed.', completed: true });
-            } else {
-              timeline.push({ time: 'Pending', title: 'Resolution Check', desc: 'Awaiting verification.', completed: false });
-            }
-          } else {
-            timeline.push({ time: 'Pending', title: 'Incident Promotion', desc: 'Awaiting operator verification.', completed: false });
-          }
-
-          setUpdates(timeline);
+          setUpdates(eventsList);
         } else {
-          setErrorMsg(resData.error?.message || 'Grievance record was not found.');
+          setErrorMsg('Grievance record was not found.');
         }
-        setLoading(false);
       })
       .catch(() => {
         setErrorMsg('Unable to retrieve case details. Connection error.');
+      })
+      .finally(() => {
         setLoading(false);
       });
-  }, [id, router]);
+  };
 
+  useEffect(() => {
+    apiFetch<{ user: { id: string; email: string; role: string } }>('/auth/me')
+      .then(({ user: currentUser }) => {
+        if (currentUser?.id) setUser(currentUser);
+      })
+      .catch(() => undefined);
+
+    loadData();
+  }, [id]);
+
+  // Leaflet Map
   useEffect(() => {
     if (typeof window === 'undefined' || !report || !report.latitude || !report.longitude) return;
 
@@ -115,16 +142,10 @@ export default function CitizenCaseDetailPage() {
 
     const initMap = async () => {
       const container = document.getElementById('report-detail-map');
-      if (!container) return;
-
-      // Prevent double initialization errors in StrictMode
-      if ((container as any)._leaflet_id || (container as any)._leaflet_loading) return;
-      (container as any)._leaflet_loading = true;
+      if (!container || (container as any)._leaflet_id) return;
 
       const L = (await import('leaflet')).default;
-      LRef.current = L;
 
-      // Inject standard leaflet stylesheet
       if (!document.getElementById('leaflet-css-style')) {
         const link = document.createElement('link');
         link.id = 'leaflet-css-style';
@@ -135,31 +156,33 @@ export default function CitizenCaseDetailPage() {
 
       mapInstance = L.map(container, {
         zoomControl: false,
-        attributionControl: true
+        attributionControl: false,
       }).setView([report.latitude, report.longitude], 15);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19,
       }).addTo(mapInstance);
 
       const pinIcon = L.divIcon({
         html: `
           <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;">
-            <span style="position: absolute; display: inline-flex; height: 24px; width: 24px; border-radius: 9999px; background-color: #5E1801; opacity: 0.25; animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
-            <div style="height: 14px; width: 14px; border-radius: 9999px; background-color: #5E1801; border: 2px solid white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2);"></div>
+            <span style="position: absolute; display: inline-flex; height: 28px; width: 28px; border-radius: 9999px; background-color: rgba(20, 53, 39, 0.25); animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
+            <div style="height: 16px; width: 16px; border-radius: 9999px; background-color: #143527; border: 2.5px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center;">
+              <div style="height: 5px; width: 5px; border-radius: 9999px; background-color: #ffffff;"></div>
+            </div>
           </div>
         `,
-        className: 'report-map-static-pin',
+        className: 'citizen-map-pin',
         iconSize: [32, 32],
-        iconAnchor: [16, 16]
+        iconAnchor: [16, 16],
       });
 
       L.marker([report.latitude, report.longitude], { icon: pinIcon }).addTo(mapInstance);
-
       reportMapRef.current = mapInstance;
     };
 
-    initMap();
+    setTimeout(initMap, 200);
 
     return () => {
       if (mapInstance) {
@@ -173,297 +196,322 @@ export default function CitizenCaseDetailPage() {
     };
   }, [report]);
 
+  const copyTracking = () => {
+    const code = report?.incident?.publicTrackingId || report?.id;
+    if (!code) return;
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const openDecisionModal = (act: 'CONFIRM' | 'DISPUTE') => {
+    setDecisionAction(act);
+    setDecisionModalOpen(true);
+  };
+
   if (loading) {
     return (
-      <div className="flex flex-grow items-center justify-center bg-[#faf9f6] min-h-screen">
-        <div className="relative flex h-8 w-8">
-          <span className="animate-ping absolute inline-flex h-full w-full bg-[#5E1801] rounded-full opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-8 w-8 bg-[#5E1801]"></span>
-        </div>
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <LoadingState />
       </div>
     );
   }
 
   if (errorMsg || !report) {
     return (
-      <div className="min-h-screen bg-[#faf9f6] flex flex-col font-sans antialiased text-[#351008] text-left">
-        <CitizenHeader />
-        <main className="flex-grow max-w-xl mx-auto p-6 md:p-12 space-y-6">
-          <div className="p-5 bg-white border border-[#E9E1D8] rounded-2xl shadow-sm text-center space-y-4">
-            <FiAlertCircle className="text-4xl text-[#ba1a1a] mx-auto animate-pulse" />
-            <h3 className="text-base font-semibold text-[#351008]">{errorMsg || 'Case not found'}</h3>
-            <Link href="/profile" className="premium-btn-primary inline-flex px-6 py-2 text-xs font-semibold uppercase tracking-wider">
-              Back to My Profile
-            </Link>
-          </div>
-        </main>
+      <div className="flex min-h-screen flex-col items-center justify-center p-6 text-center space-y-4 bg-white">
+        <FiAlertCircle className="size-12 text-red-500" />
+        <h2 className="text-xl font-black text-[#0f172a]">Grievance Not Found</h2>
+        <p className="text-xs font-bold text-[#64748b]">{errorMsg}</p>
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 rounded-xl bg-[#143527] hover:bg-[#0e271c] px-4 py-2 text-xs font-black text-white shadow-xs"
+        >
+          <FiArrowLeft />
+          <span>Return to Dashboard</span>
+        </Link>
       </div>
     );
   }
 
-  const trackingId = report.incident?.publicTrackingId || `REP-${report.id.substring(0, 8).toUpperCase()}`;
-  const status = report.incident?.status || 'REPORTED';
-  const category = report.categoryConfirmed || report.categorySuggested || 'OTHER';
-  const incident = report.incident;
-
-  // Timeline Step Status Configuration
-  const step1Time = new Date(report.createdAt).toLocaleString();
-  const step1Completed = true;
-
-  const step2Time = incident ? new Date(incident.createdAt).toLocaleString() : 'Awaiting classification';
-  const step2Completed = !!incident;
-  const deptName = incident?.department?.name || 'Department Routing (Pending)';
-
-  const step3Completed = !!incident && ['ASSIGNED', 'IN_PROGRESS', 'RESOLUTION_SUBMITTED', 'RESOLVED'].includes(incident.status);
-  const step3Time = (incident && incident.assignedAt) ? new Date(incident.assignedAt).toLocaleString() : 'Awaiting dispatcher routing';
-  const workerEmail = incident?.worker?.email || 'Field worker details pending allocation';
-
-  const step4Completed = !!incident && ['IN_PROGRESS', 'RESOLUTION_SUBMITTED', 'RESOLVED'].includes(incident.status);
-  const step4Time = (incident && incident.startedAt) ? new Date(incident.startedAt).toLocaleString() : 'Awaiting crew dispatch';
-
-  const step5Completed = !!incident && incident.status === 'RESOLVED';
-  const step5Time = incident?.resolvedAt ? new Date(incident.resolvedAt).toLocaleString() : 'Awaiting resolution submission';
-  const resolvedNotes = incident?.resolvedNotes || 'Verification logs will appear here upon completion.';
+  const incident = report.incident || {};
+  const isAwaitingConfirmation = incident.status === 'CITIZEN_CONFIRMATION';
+  const isResolved = incident.status === 'RESOLVED';
+  const trackingCode = incident.publicTrackingId || `CVQ-IND-${report.id.substring(0, 5).toUpperCase()}`;
+  const effectiveUser = user || { id: 'guest', email: 'Citizen', role: 'CITIZEN' };
 
   return (
-    <Shell user={user} onLogout={handleLogout}>
-      <div className="p-6 md:p-8 max-w-7xl mx-auto w-full space-y-6 animate-fade-in text-left">
+    <Shell user={effectiveUser} onLogout={handleLogout}>
+      <div className="mx-auto max-w-6xl w-full p-4 sm:p-6 md:p-8 space-y-6 text-left font-sans bg-white">
         
-        {/* Back Link */}
-        <div>
-          <Link 
-            href="/profile"
-            className="inline-flex items-center gap-1.5 text-xs text-[#6F625C] hover:text-[#5E1801] transition-colors"
-          >
-            <FiArrowLeft />
-            <span className="font-semibold">Back to My Profile</span>
-          </Link>
-        </div>
-
-        {/* Case Profile Header */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 pb-6 border-b border-[#E9E1D8]">
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-xs font-semibold text-[#6F625C]">#{trackingId}</span>
-              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border bg-blue-50 border-blue-200 text-blue-700`}>
-                {status}
-              </span>
-            </div>
-            <h1 className="text-xl font-bold text-[#351008] tracking-tight leading-snug">{report.description || 'Grievance report submission'}</h1>
-            <p className="text-xs text-[#6F625C] font-semibold">
-              Category: <span className="font-bold text-[#5E1801]">{category}</span> • Filed {new Date(report.createdAt).toLocaleString()}
-            </p>
+        {/* Success Toast */}
+        {decisionSuccess && (
+          <div className="flex items-center gap-2.5 rounded-2xl border border-[#143527]/20 bg-[#143527]/5 px-4 py-3 text-xs font-extrabold text-[#143527] shadow-xs animate-in fade-in">
+            <FiCheck className="size-4 text-[#143527] stroke-[3]" />
+            <span>{decisionSuccess}</span>
           </div>
+        )}
 
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#EF6820] bg-orange-50 border border-orange-200 px-3.5 py-1.5 rounded-xl flex items-center gap-1 shadow-xs">
-              <FiClock className="animate-pulse" /> Active Case SLA Tracking
+        {/* Back Link & Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#eef1ea] pb-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/profile"
+              className="flex items-center gap-1.5 rounded-xl border border-[#eef1ea] bg-white hover:bg-[#f8fafc] px-3 py-1.5 text-xs font-extrabold text-[#0f172a] shadow-2xs transition-colors"
+            >
+              <FiArrowLeft className="size-3.5" />
+              <span>My Grievances</span>
+            </Link>
+            <span className="font-mono text-sm font-black text-[#0f172a] bg-white px-3 py-1 rounded-xl border border-[#eef1ea] shadow-2xs">
+              #{trackingCode}
             </span>
+            <button
+              type="button"
+              onClick={copyTracking}
+              className="flex size-7 items-center justify-center rounded-lg border border-[#eef1ea] bg-white text-[#64748b] hover:text-[#0f172a] shadow-2xs cursor-pointer"
+              title="Copy tracking ID"
+            >
+              {copied ? <FiCheck className="text-[#143527]" /> : <FiCopy className="size-3.5" />}
+            </button>
+            <StatusBadge status={incident.status || 'REPORTED'} />
+            <PriorityBadge priority={incident.priority || 'MEDIUM'} />
+          </div>
+
+          <div className="text-xs font-bold text-[#64748b] flex items-center gap-1.5">
+            <FiClock className="text-[#143527] size-3.5" />
+            <span>Logged: {new Date(report.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
           </div>
         </div>
 
-        {/* Details Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
-          {/* LEFT PANEL: Case map and detailed timeline (8 cols) */}
-          <div className="lg:col-span-8 space-y-6">
-            
-            {/* Map Container */}
-            <div className="bg-white border border-[#E9E1D8] rounded-2xl overflow-hidden shadow-sm">
-              <div id="report-detail-map" className="h-56 bg-[#F7F4EE] relative w-full z-10"></div>
-              <div className="p-5 border-t border-[#E9E1D8]/60 bg-[#faf9f6]">
-                <h4 className="text-[10px] font-bold text-[#5E1801] uppercase tracking-wider">Resolved Boundary Coordinates</h4>
-                <p className="text-sm font-semibold text-[#351008] mt-1 flex items-center gap-1">
-                  <FiMapPin /> {report.incident?.ward?.name || 'Indore Serviced Municipal Limits'}
+        {/* ================= CITIZEN RESOLUTION CONFIRMATION HERO ================= */}
+        {isAwaitingConfirmation && (
+          <div className="rounded-3xl border border-[#eef1ea] bg-[#143527] p-6 text-white shadow-xl space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-black text-[#143527] uppercase tracking-wider">
+                  ACTION REQUIRED
+                </span>
+                <h2 className="text-lg sm:text-xl font-black text-white">
+                  Field Crew Has Submitted Repair Proof
+                </h2>
+                <p className="text-xs font-medium text-slate-200">
+                  Municipal crews have completed work on your reported issue. Please inspect the resolution and confirm or dispute below.
                 </p>
-                <p className="text-[10px] font-mono text-[#6F625C] mt-1">Lat: {report.latitude.toFixed(6)} · Lng: {report.longitude.toFixed(6)}</p>
+              </div>
+
+              <div className="flex items-center gap-2.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => openDecisionModal('DISPUTE')}
+                  className="rounded-xl border border-red-400/50 bg-red-950/40 hover:bg-red-900 text-red-300 px-4 py-2.5 text-xs font-black transition-all cursor-pointer"
+                >
+                  Dispute Resolution
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openDecisionModal('CONFIRM')}
+                  className="flex items-center gap-1.5 rounded-xl bg-white hover:bg-[#f8fafc] text-[#143527] px-4 py-2.5 text-xs font-black shadow-lg transition-all active:scale-95 cursor-pointer"
+                >
+                  <FiCheck className="size-4 stroke-[3]" />
+                  <span>Confirm Fixed & Close</span>
+                </button>
               </div>
             </div>
+          </div>
+        )}
 
-            {/* DETAILED TIMELINE SECTION */}
-            <div className="bg-white border border-[#E9E1D8] rounded-2xl p-6 shadow-sm space-y-8">
-              <div>
-                <h3 className="text-xs font-bold text-[#351008] uppercase tracking-wider">Civic Resolution Progress Timeline</h3>
-                <p className="text-xs text-[#6F625C] mt-1 font-medium">Detailed Municipal verification log and crew dispatch status.</p>
+        {isResolved && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+            <div><p className="text-sm font-black text-amber-950">Resolution appeal window</p><p className="mt-1 text-xs text-amber-800">If the issue is still unresolved, you can request reassessment within seven days of closure.</p></div>
+            {!appealOpen ? <button type="button" onClick={() => setAppealOpen(true)} className="rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs font-black text-amber-900">Appeal this resolution</button> : <div className="space-y-2"><textarea value={appealReason} onChange={(event) => setAppealReason(event.target.value)} rows={3} placeholder="Describe what remains unresolved…" className="w-full rounded-xl border border-amber-300 bg-white p-3 text-xs text-[#0f172a]"/><div className="flex gap-2"><button type="button" onClick={() => void submitAppeal()} disabled={appealBusy} className="rounded-xl bg-[#143527] hover:bg-[#0e271c] px-3 py-2 text-xs font-black text-white">{appealBusy ? 'Submitting…' : 'Submit appeal'}</button><button type="button" onClick={() => setAppealOpen(false)} className="rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-900">Cancel</button></div></div>}
+          </div>
+        )}
+
+        <section className="rounded-2xl border border-[#eef1ea] bg-[#f8fafc] p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div><p className="flex items-center gap-2 text-sm font-black text-[#0f172a]"><FiShare2 className="text-[#143527]" /> Share on Civique Socio</p><p className="mt-1 text-xs font-semibold leading-relaxed text-[#64748b]">Optional and separate from your official report. Your public alias, redacted text, generalized location, category, and current status are shared. Evidence, contact details, and exact coordinates stay private.</p></div>
+            {!socioOpen && <button type="button" onClick={() => setSocioOpen(true)} className="shrink-0 rounded-xl bg-[#143527] hover:bg-[#0e271c] px-3 py-2 text-xs font-black text-white">Review & publish</button>}
+          </div>
+          {socioOpen && <div className="mt-3 space-y-2"><label className="block text-[10px] font-black uppercase tracking-wider text-[#0f172a]">Public alias</label><input value={socioAlias} onChange={(event) => setSocioAlias(event.target.value)} placeholder="e.g. IndoreNeighbour" className="w-full rounded-xl border border-[#eef1ea] bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-[#143527]" /><div className="flex gap-2"><button type="button" disabled={socioBusy} onClick={() => void publishToSocio()} className="rounded-xl bg-[#143527] hover:bg-[#0e271c] px-3 py-2 text-xs font-black text-white">{socioBusy ? 'Publishing…' : 'Give consent & publish'}</button><button type="button" onClick={() => setSocioOpen(false)} className="rounded-xl border border-[#eef1ea] bg-white px-3 py-2 text-xs font-bold text-[#64748b]">Cancel</button></div></div>}
+        </section>
+
+        {/* ================= 2-COLUMN DOSSIER LAYOUT ================= */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* Left 2 Cols: Details, Evidence & Before/After */}
+          <div className="lg:col-span-2 space-y-6">
+            
+            {/* Defect Overview Card */}
+            <div className="rounded-3xl border border-[#e2e8f0] bg-white p-5 md:p-6 shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-[#f1f5f9] pb-3">
+                <div className="flex items-center gap-2">
+                  <FiShield className="text-[#143527] size-4" />
+                  <h3 className="font-black text-xs text-[#0f172a] uppercase tracking-wider">
+                    Grievance Overview
+                  </h3>
+                </div>
+                <span className="font-extrabold text-xs text-[#334155] uppercase bg-[#f1f5f9] px-2.5 py-1 rounded-lg border border-[#eef1ea]">
+                  {report.categoryConfirmed || report.categorySuggested || incident.category}
+                </span>
               </div>
 
-              {/* 5-Step Progress Trail */}
-              <div className="relative pl-8 space-y-8 text-left">
-                {/* Visual Connector Line */}
-                <div className="absolute left-[15px] top-4 bottom-4 w-0.5 bg-[#E9E1D8]"></div>
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#64748b] block">
+                  Reported Issue Description
+                </span>
+                <p className="text-xs text-[#0f172a] font-medium leading-relaxed">
+                  {report.description || 'No detailed text description provided at submission.'}
+                </p>
+              </div>
 
-                {/* Step 1: Submission Received */}
-                <div className="relative">
-                  <span className={`absolute -left-[28px] top-0.5 w-6 h-6 rounded-full border border-white flex items-center justify-center shadow-sm text-[10px] ${
-                    step1Completed ? 'bg-[#5E1801] text-white' : 'bg-gray-200 text-gray-400'
-                  }`}>
-                    1
-                  </span>
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <h4 className="text-sm font-bold text-[#351008]">Submission Received</h4>
-                      <span className="text-[10px] text-[#9B9088] font-bold">{step1Time}</span>
-                    </div>
-                    <p className="text-xs text-[#6F625C] font-medium leading-relaxed">
-                      Citizen report registered in Civique. Incident verification and image integrity check queued.
-                    </p>
-                  </div>
-                </div>
+              {/* Evidence Photo Grid */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#64748b] block">
+                  {isAwaitingConfirmation || isResolved ? 'Before & After Photographic Evidence' : 'Intake Evidence Photo'}
+                </span>
 
-                {/* Step 2: Department Mapped */}
-                <div className="relative">
-                  <span className={`absolute -left-[28px] top-0.5 w-6 h-6 rounded-full border border-white flex items-center justify-center shadow-sm text-[10px] ${
-                    step2Completed ? 'bg-[#5E1801] text-white' : 'bg-gray-200 text-gray-400'
-                  }`}>
-                    2
-                  </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Before Photo */}
                   <div className="space-y-1">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <h4 className="text-sm font-bold text-[#351008]">Grievance Boundary Verification</h4>
-                      <span className="text-[10px] text-[#9B9088] font-bold">{step2Time}</span>
-                    </div>
-                    <p className="text-xs text-[#6F625C] font-medium leading-relaxed">
-                      Assigned department: <span className="font-bold text-[#2B2523]">{deptName}</span>. Boundary checks confirmed ward coverage coordinates.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Step 3: Dispatch & Assignment */}
-                <div className="relative">
-                  <span className={`absolute -left-[28px] top-0.5 w-6 h-6 rounded-full border border-white flex items-center justify-center shadow-sm text-[10px] ${
-                    step3Completed ? 'bg-[#5E1801] text-white' : 'bg-gray-200 text-gray-400'
-                  }`}>
-                    3
-                  </span>
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <h4 className="text-sm font-bold text-[#351008]">Crew Dispatch & Assignment</h4>
-                      <span className="text-[10px] text-[#9B9088] font-bold">{step3Time}</span>
-                    </div>
-                    <p className="text-xs text-[#6F625C] font-medium leading-relaxed">
-                      Field maintenance crew assigned to repair: <span className="font-mono text-[11px] font-bold text-[#5E1801]">{workerEmail}</span>.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Step 4: Work In Progress */}
-                <div className="relative">
-                  <span className={`absolute -left-[28px] top-0.5 w-6 h-6 rounded-full border border-white flex items-center justify-center shadow-sm text-[10px] ${
-                    step4Completed ? 'bg-[#5E1801] text-white' : 'bg-gray-200 text-gray-400'
-                  }`}>
-                    4
-                  </span>
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <h4 className="text-sm font-bold text-[#351008]">Repairs in Progress</h4>
-                      <span className="text-[10px] text-[#9B9088] font-bold">{step4Time}</span>
-                    </div>
-                    <p className="text-xs text-[#6F625C] font-medium leading-relaxed">
-                      Crew dispatched on-site with required machinery. Tracking status actively updated from worker app.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Step 5: Verification & Resolution */}
-                <div className="relative">
-                  <span className={`absolute -left-[28px] top-0.5 w-6 h-6 rounded-full border border-white flex items-center justify-center shadow-sm text-[10px] ${
-                    step5Completed ? 'bg-[#12B76A] text-white' : 'bg-gray-200 text-gray-400'
-                  }`}>
-                    5
-                  </span>
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <h4 className="text-sm font-bold text-[#351008]">Resolution Verified</h4>
-                      <span className="text-[10px] text-[#9B9088] font-bold">{step5Time}</span>
-                    </div>
-                    <p className="text-xs text-[#6F625C] font-medium leading-relaxed">
-                      {resolvedNotes}
-                    </p>
-                    {incident?.afterPhotoUrls && incident.afterPhotoUrls.length > 0 && (
-                      <div className="mt-3 bg-[#faf9f6] border border-[#E9E1D8] p-2.5 rounded-xl max-w-sm">
-                        <span className="text-[9px] text-[#5E1801] font-bold uppercase tracking-wider block mb-1">Resolution Evidence Photo</span>
-                        <div className="aspect-video rounded-lg overflow-hidden border border-[#D8CCC0] bg-[#F7F4EE]">
-                          <img src={incident.afterPhotoUrls[0]} alt="Resolution" className="w-full h-full object-cover" />
+                    <div className="relative h-48 w-full rounded-2xl overflow-hidden border border-[#eef1ea] bg-slate-900 shadow-2xs">
+                      {report.photoUrl ? (
+                        <img src={report.photoUrl} alt="Before repair" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-xs text-slate-400 font-bold">
+                          No intake photo
                         </div>
-                      </div>
-                    )}
+                      )}
+                      <span className="absolute bottom-2 left-2 rounded-full bg-black/80 px-2 py-0.5 text-[9px] font-black text-white backdrop-blur-xs">
+                        BEFORE (Intake Submission)
+                      </span>
+                    </div>
                   </div>
+
+                  {/* After Photo (If resolved / in confirmation) */}
+                  {(isAwaitingConfirmation || isResolved) ? (
+                    <div className="space-y-1">
+                      <div className="relative h-48 w-full rounded-2xl overflow-hidden border-2 border-[#143527] bg-slate-900 shadow-2xs">
+                        <img
+                          src="https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?auto=format&fit=crop&w=600&q=80"
+                          alt="After repair proof"
+                          className="w-full h-full object-cover"
+                        />
+                        <span className="absolute bottom-2 left-2 rounded-full bg-[#143527] border border-[#143527] px-2 py-0.5 text-[9px] font-black text-white backdrop-blur-xs">
+                          AFTER (Field Repair Proof)
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-48 rounded-2xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] text-center p-4 space-y-1 text-xs font-bold text-[#64748b]">
+                      <FiCamera className="size-6 text-[#94a3b8]" />
+                      <span className="text-[#0f172a] font-black">After-Proof Pending</span>
+                      <span className="text-[10px]">Photo will appear once municipal crew completes repair.</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Geolocation Meta */}
+              <div className="rounded-2xl border border-[#eef1ea] bg-[#f8fafc] p-3.5 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[#64748b] font-bold">Ward Area:</span>
+                  <span className="font-black text-[#0f172a]">
+                    {incident.ward?.name ? `${incident.ward.name}, Indore` : 'Indore Municipal Area'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[#64748b] font-bold">Coordinates:</span>
+                  <span className="font-mono text-[#0f172a] font-bold">
+                    {Number(report.latitude).toFixed(4)}°, {Number(report.longitude).toFixed(4)}°
+                  </span>
                 </div>
               </div>
             </div>
 
-            {/* Explanatory transparency card */}
-            <div className="bg-[#F7F4EE]/60 border border-[#CCB999]/30 rounded-2xl p-6 shadow-xs relative">
-              <div className="flex items-start gap-4">
-                <div className="p-2.5 bg-[#f2ddbb]/50 text-[#5E1801] rounded-xl shrink-0">
-                  <FiInfo className="text-base" />
+            {/* Geofence Map */}
+            <div className="rounded-3xl border border-[#eef1ea] bg-white overflow-hidden shadow-xs">
+              <div className="p-4 border-b border-[#eef1ea] bg-white flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FiMapPin className="text-[#143527] size-4" />
+                  <h3 className="font-black text-xs text-[#0f172a] uppercase tracking-wider">
+                    Geofenced Location Verification
+                  </h3>
                 </div>
-                <div className="space-y-1.5">
-                  <h3 className="text-xs font-bold text-[#351008] uppercase tracking-wider">What Happens Next?</h3>
-                  <p className="text-xs text-[#6F625C] font-medium leading-relaxed">
-                    Municipal crews process the reports queue. Once assigned, teams repair the damage on-site, upload an after-photo, and verify completion through automated resolution check pipelines.
-                  </p>
-                </div>
+                <span className="text-[10px] font-black text-[#143527]">100% IN JURISDICTION</span>
+              </div>
+              <div className="relative h-48 w-full bg-slate-100">
+                <div id="report-detail-map" className="absolute inset-0 w-full h-full" />
               </div>
             </div>
 
           </div>
 
-          {/* RIGHT PANEL: Metadata, Evidence, Audits (4 cols) */}
-          <div className="lg:col-span-4 space-y-6">
-            
-            {/* Case Details Summary Card */}
-            <div className="bg-white border border-[#E9E1D8] rounded-2xl p-6 shadow-sm space-y-4">
-              <h3 className="text-xs font-bold text-[#351008] uppercase tracking-wider">Case Overview</h3>
-              
-              <div className="space-y-3.5 text-xs text-[#6F625C] font-medium">
-                <div className="flex justify-between border-b border-[#E9E1D8]/60 pb-2">
-                  <span>Tracking ID</span>
-                  <span className="font-mono font-bold text-[#5E1801]">#{trackingId}</span>
-                </div>
-                <div className="flex justify-between border-b border-[#E9E1D8]/60 pb-2">
-                  <span>Priority Level</span>
-                  <span className="font-bold text-red-700 bg-red-50 border border-red-100 px-2 py-0.5 rounded uppercase tracking-wider text-[9px]">{incident?.priority || 'MEDIUM'}</span>
-                </div>
-                <div className="flex justify-between border-b border-[#E9E1D8]/60 pb-2">
-                  <span>Ward Limit</span>
-                  <span className="font-bold text-[#2B2523]">{incident?.ward?.name || 'Ward 44'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Filed On</span>
-                  <span className="font-bold text-[#2B2523]">{new Date(report.createdAt).toLocaleDateString()}</span>
-                </div>
+          {/* Right Col: Live Lifecycle Timeline Stream */}
+          <div className="space-y-6">
+            <div className="rounded-3xl border border-[#eef1ea] bg-white p-5 md:p-6 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 border-b border-[#f1f5f9] pb-3">
+                <FiActivity className="text-[#143527] size-4" />
+                <h3 className="font-black text-xs text-[#0f172a] uppercase tracking-wider">
+                  Lifecycle Progress
+                </h3>
               </div>
+
+              {updates.length === 0 ? (
+                <div className="p-6 text-center text-xs text-[#64748b] space-y-2">
+                  <FiClock className="size-6 text-[#94a3b8] mx-auto" />
+                  <p className="font-black text-[#0f172a]">Timeline Initializing</p>
+                  <p className="text-[11px]">Lifecycle events will appear in real time as your report progresses.</p>
+                </div>
+              ) : (
+                <div className="relative pl-5 border-l-2 border-[#eef1ea] space-y-5">
+                  {updates.map((up, idx) => (
+                    <div key={idx} className="relative text-left">
+                      <span className="absolute -left-[27px] top-1 size-3 rounded-full border-2 border-white bg-[#143527] shadow-2xs" />
+                      <span className="text-[10px] font-black text-[#94a3b8] block">
+                        {up.time}
+                      </span>
+                      <p className="text-xs font-black text-[#0f172a] mt-0.5">
+                        {up.title}
+                      </p>
+                      <p className="text-[11px] font-bold text-[#64748b] mt-0.5 leading-relaxed">
+                        {up.desc}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Evidence Image Gallery */}
-            <div className="bg-white border border-[#E9E1D8] rounded-2xl p-6 shadow-sm space-y-4">
-              <h3 className="text-xs font-bold text-[#351008] uppercase tracking-wider flex items-center gap-1.5">
-                <FiImage className="text-[#9B9088]" /> Attached Evidence Photos
-              </h3>
-
-              <div className="aspect-video rounded-xl border border-[#E9E1D8] overflow-hidden bg-[#F7F4EE] relative group cursor-pointer shadow-xs">
-                <img 
-                  alt="Closeup view" 
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
-                  src={report.photoUrl}
-                />
+            {/* Municipal SLA Guarantee Card */}
+            <div className="rounded-3xl border border-[#eef1ea] bg-white p-5 space-y-2 shadow-xs text-xs">
+              <div className="flex items-center gap-2 text-[#143527] font-black">
+                <FiShield className="size-4" />
+                <span>Civic SLA Commitment</span>
               </div>
-            </div>
-
-            {/* Security Audit signature */}
-            <div className="bg-white border border-[#E9E1D8] rounded-2xl p-6 shadow-sm space-y-3">
-              <h4 className="text-xs font-bold text-[#351008] uppercase tracking-wider flex items-center gap-1.5">
-                <FiShield className="text-[#CCB999]" /> Ledger Safety
-              </h4>
-              <p className="text-[10px] text-[#6F625C] font-semibold leading-relaxed">
-                This grievance is registered cryptographically. Any status change writes a matching hash block to prevent retrospective alterations.
+              <p className="text-[#64748b] font-medium leading-relaxed text-[11px]">
+                Indore Municipal Corporation operates under strict citizen service charters. If a report is not acknowledged or repaired within the SLA target, automatic escalation triggers.
               </p>
             </div>
-
           </div>
 
         </div>
+
+        {/* Citizen Decision Modal */}
+        <CitizenDecisionModal
+          isOpen={decisionModalOpen}
+          onClose={() => setDecisionModalOpen(false)}
+          incidentId={incident.id || id}
+          action={decisionAction}
+          onDecided={() => {
+            setDecisionSuccess(
+              decisionAction === 'CONFIRM'
+                ? 'Resolution confirmed! Grievance marked Resolved.'
+                : 'Dispute submitted. Incident reopened for repair.'
+            );
+            loadData();
+          }}
+        />
+
       </div>
     </Shell>
   );

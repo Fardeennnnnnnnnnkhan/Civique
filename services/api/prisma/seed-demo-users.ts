@@ -15,8 +15,7 @@ async function main() {
   const users: Array<{ role: UserRole; email: string; cityId?: string | null; zoneId?: string | null; wardId?: string | null; departmentId?: string | null }> = [
     { role: UserRole.CITIZEN, email: 'demo.citizen@civique.local' },
     { role: UserRole.FIELD_WORKER, email: 'demo.fieldworker@civique.local', cityId: city.id, zoneId: city.zones[0]?.id, wardId: ward?.id, departmentId: department?.id },
-    // Demo account intentionally has no ward scope so it can review all wards during testing.
-    { role: UserRole.WARD_OFFICER, email: 'demo.wardofficer@civique.local', cityId: city.id, zoneId: null, wardId: null },
+    { role: UserRole.WARD_OFFICER, email: 'demo.wardofficer@civique.local', cityId: city.id, zoneId: city.zones[0]?.id, wardId: ward?.id },
     { role: UserRole.DEPARTMENT_HEAD, email: 'demo.departmenthead@civique.local', cityId: city.id, departmentId: department?.id },
     { role: UserRole.ZONAL_OFFICER, email: 'demo.zonalofficer@civique.local', cityId: city.id, zoneId: city.zones[0]?.id },
     { role: UserRole.COMMISSIONER, email: 'demo.commissioner@civique.local', cityId: city.id },

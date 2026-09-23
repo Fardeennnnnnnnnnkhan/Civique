@@ -1,8 +1,16 @@
 import { IncidentStatus, UserRole } from '@prisma/client';
 import { prisma } from '../db';
 import { logIncidentChange } from '../utils/audit';
+import { addWorkingHours, workingMillisecondsBetween } from './slaCalendar';
 
 const ACTIVE = [IncidentStatus.REPORTED, IncidentStatus.AI_REVIEW, IncidentStatus.OPEN, IncidentStatus.ACKNOWLEDGED, IncidentStatus.ASSIGNED, IncidentStatus.IN_PROGRESS, IncidentStatus.REOPENED, IncidentStatus.DISPUTED];
+
+export function calculateSlaTier(elapsedWorkingHours: number, policy: { tier1Hours: number; tier2Hours: number; commissionerHours: number }): number {
+  if (elapsedWorkingHours >= policy.commissionerHours) return 3;
+  if (elapsedWorkingHours >= policy.tier2Hours) return 2;
+  if (elapsedWorkingHours >= policy.tier1Hours) return 1;
+  return 0;
+}
 
 export async function ensureIncidentSla(incidentId: string) {
   const incident = await prisma.incident.findUnique({ where: { id: incidentId } });
@@ -11,8 +19,9 @@ export async function ensureIncidentSla(incidentId: string) {
   if (existing) return existing;
   let policy = await (prisma as any).slaPolicy.findFirst({ where: { active: true, OR: [{ cityId: incident.cityId }, { cityId: null }], effectiveFrom: { lte: new Date() }, AND: [{ OR: [{ effectiveUntil: null }, { effectiveUntil: { gt: new Date() } }] }] }, orderBy: [{ cityId: 'desc' }, { version: 'desc' }] });
   if (!policy) policy = await (prisma as any).slaPolicy.create({ data: { name: 'Civique Default Policy', cityId: incident.cityId, version: 1 } });
-  const deadline = new Date(incident.createdAt.getTime() + policy.tier1Hours * 3600000);
-  return (prisma as any).incidentSla.create({ data: { incidentId, policyId: policy.id, deadlineAt: deadline } });
+  const startedAt = incident.createdAt;
+  const deadline = addWorkingHours(startedAt, policy.tier1Hours, policy.timezone, policy.workingCalendar);
+  return (prisma as any).incidentSla.create({ data: { incidentId, policyId: policy.id, startedAt, deadlineAt: deadline } });
 }
 
 export async function evaluateDurableSla(): Promise<{ evaluated: number; escalated: number; events: number }> {
@@ -23,8 +32,8 @@ export async function evaluateDurableSla(): Promise<{ evaluated: number; escalat
       const sla = await ensureIncidentSla(incident.id);
       const policy = await (prisma as any).slaPolicy.findUnique({ where: { id: sla.policyId } });
       if (!policy || sla.state !== 'ACTIVE') continue;
-      const elapsed = (Date.now() - sla.startedAt.getTime()) / 3600000;
-      const tier = elapsed >= policy.commissionerHours ? 3 : elapsed >= policy.tier2Hours ? 2 : elapsed >= policy.tier1Hours ? 1 : 0;
+      const elapsed = workingMillisecondsBetween(sla.startedAt, new Date(), policy.timezone, policy.workingCalendar) / 3600000;
+      const tier = calculateSlaTier(elapsed, policy);
       if (tier <= sla.currentTier) continue;
       await prisma.$transaction(async tx => {
         const event = await (tx as any).slaEscalationEvent.createMany({ data: Array.from({ length: tier - sla.currentTier }, (_, i) => ({ incidentId: incident.id, incidentSlaId: sla.id, tier: sla.currentTier + i + 1, eventType: `TIER_${sla.currentTier + i + 1}`, metadata: { policyId: policy.id, policyVersion: policy.version } })), skipDuplicates: true });
@@ -41,9 +50,38 @@ export async function evaluateDurableSla(): Promise<{ evaluated: number; escalat
   return { evaluated: incidents.length, escalated, events };
 }
 
+export async function pauseIncidentSla(incidentId: string, reason: string) {
+  const sla = await (prisma as any).incidentSla.findUnique({ where: { incidentId } });
+  if (!sla) throw new Error('SLA_NOT_FOUND');
+  if (sla.state === 'PAUSED') return sla;
+  return (prisma as any).incidentSla.update({ where: { id: sla.id }, data: { state: 'PAUSED', pausedAt: new Date(), pausedReason: reason.slice(0, 500), lastEvaluatedAt: new Date() } });
+}
+
+export async function resumeIncidentSla(incidentId: string) {
+  const sla = await (prisma as any).incidentSla.findUnique({ where: { incidentId }, include: { policy: true } });
+  if (!sla) throw new Error('SLA_NOT_FOUND');
+  if (sla.state !== 'PAUSED' || !sla.pausedAt) return sla;
+  const now = new Date();
+  const pausedSeconds = Math.max(0, Math.floor((now.getTime() - sla.pausedAt.getTime()) / 1000));
+  return (prisma as any).incidentSla.update({ where: { id: sla.id }, data: { state: 'ACTIVE', pausedAt: null, pausedReason: null, pausedSeconds: { increment: pausedSeconds }, startedAt: new Date(sla.startedAt.getTime() + pausedSeconds * 1000), deadlineAt: new Date(sla.deadlineAt.getTime() + pausedSeconds * 1000), lastEvaluatedAt: now } });
+}
+
 export function startDurableSlaJob() {
-  const interval = Number(process.env.SLA_EVALUATION_INTERVAL_MS || 60000);
-  const run = () => evaluateDurableSla().catch(error => console.error('[SLA] Durable evaluation failed', error));
-  run();
-  return setInterval(run, Math.max(interval, 10000));
+  const interval = Number(process.env.SLA_EVALUATION_INTERVAL_MS || 300000);
+  let isRunning = false;
+  const run = async () => {
+    if (isRunning) return;
+    isRunning = true;
+    try {
+      await evaluateDurableSla();
+    } catch (error: any) {
+      // Log concise error without dumping full stack during pool contention
+      console.warn('[SLA] Background evaluation paused:', error?.message || error?.code || 'Connection busy');
+    } finally {
+      isRunning = false;
+    }
+  };
+  // Delay initial background check by 30s to prioritize user requests
+  setTimeout(run, 30000);
+  return setInterval(run, Math.max(interval, 60000));
 }

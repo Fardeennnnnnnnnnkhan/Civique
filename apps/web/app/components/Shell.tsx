@@ -1,18 +1,63 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { FiAlertCircle, FiFileText, FiGrid, FiHome, FiMap, FiMenu, FiPlus, FiUser, FiX } from 'react-icons/fi';
 import Sidebar from './Sidebar';
-import NotificationBell from './NotificationBell';
+import MobileNavigation from './MobileNavigation';
+import TopBar from './TopBar';
 
 type User = { id: string; email: string; role: string };
-const mobileItems = (role: string) => role === 'CITIZEN' ? [{ name: 'Home', href: '/', icon: FiHome }, { name: 'Report', href: '/report', icon: FiPlus }, { name: 'Reports', href: '/profile', icon: FiFileText }, { name: 'Map', href: '/map', icon: FiMap }] : role === 'FIELD_WORKER' ? [{ name: 'Work', href: '/admin', icon: FiGrid }, { name: 'Tasks', href: '/admin/incidents', icon: FiAlertCircle }, { name: 'Map', href: '/map', icon: FiMap }] : [{ name: 'Home', href: '/admin', icon: FiGrid }, { name: 'Incidents', href: '/admin/incidents', icon: FiAlertCircle }, { name: 'Map', href: '/map', icon: FiMap }];
 
-export default function Shell({ user, onLogout, children }: { user: User | null; onLogout: () => void; children: React.ReactNode }) {
-  const pathname = usePathname(); const [open, setOpen] = useState(false);
-  if (!user) return <div className="min-h-screen bg-background">{children}</div>;
-  const items = mobileItems(user.role);
-  return <div className="flex h-screen w-full overflow-hidden bg-background text-foreground"><div className="hidden h-full md:block"><Sidebar user={user} onLogout={onLogout} /></div><div className="flex min-w-0 flex-1 flex-col"><header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur md:px-6"><div className="flex items-center gap-3"><button type="button" aria-label="Open navigation" onClick={() => setOpen(true)} className="rounded-md p-2 hover:bg-muted md:hidden"><FiMenu aria-hidden="true" className="size-5" /></button><div className="hidden items-center gap-2 md:flex"><span className="rounded-md bg-primary/10 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-primary">{user.role.replaceAll('_', ' ')} portal</span></div><Link href="/" className="flex items-center gap-2 md:hidden"><img src="/civique.png" alt="Civique" className="size-7 object-contain" /><span className="font-semibold tracking-tight">Civique</span></Link></div><div className="flex items-center gap-3"><NotificationBell userId={user.id} /><span className="h-5 w-px bg-border" aria-hidden="true" /><Link href={user.role === 'CITIZEN' ? '/profile' : '/admin/settings'} className="flex items-center gap-2 rounded-md p-1.5 hover:bg-muted"><span className="flex size-8 items-center justify-center rounded-md bg-secondary text-xs font-semibold text-secondary-foreground">{user.email ? user.email.slice(0, 2).toUpperCase() : <FiUser />}</span><span className="hidden max-w-44 truncate text-sm font-medium lg:block">{user.email}</span></Link></div></header><main className="min-h-0 flex-1 overflow-y-auto pb-20 md:pb-6">{children}</main></div>{open && <div className="fixed inset-0 z-50 md:hidden"><button type="button" aria-label="Close navigation" className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} /><aside className="relative h-full w-72 shadow-xl"><button type="button" aria-label="Close navigation" onClick={() => setOpen(false)} className="absolute right-3 top-3 z-10 rounded-md p-2 text-sidebar-foreground hover:bg-sidebar-accent"><FiX aria-hidden="true" /></button><Sidebar user={user} onLogout={onLogout} /></aside></div>}<nav className="fixed inset-x-0 bottom-0 z-40 flex justify-around border-t border-border bg-background/95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden" aria-label="Mobile navigation">{items.map(({ name, href, icon: Icon }) => { const isActive = href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`); return <Link key={href} href={href} aria-current={isActive ? 'page' : undefined} className={`flex min-h-12 min-w-16 flex-col items-center justify-center gap-1 rounded-md text-xs ${isActive ? 'font-semibold text-primary' : 'text-muted-foreground'}`}><Icon aria-hidden="true" className="size-5" /><span>{name}</span></Link>; })}</nav></div>;
+export default function Shell({
+  user,
+  onLogout,
+  children,
+}: {
+  user: User | null;
+  onLogout: () => void;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const effectiveUser: User = user || { id: 'guest', email: 'Guest Citizen', role: 'CITIZEN' };
+
+  return (
+    <div className="flex h-screen w-full overflow-hidden bg-white text-[#0f172a]">
+      {/* Desktop Persistent Sidebar */}
+      <div className="hidden h-full md:block">
+        <Sidebar user={effectiveUser} onLogout={onLogout} />
+      </div>
+
+      {/* Main Workspace Column */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <TopBar user={effectiveUser} onOpenNavigation={() => setOpen(true)} />
+        <main className="min-h-0 flex-1 overflow-y-auto pb-24 md:pb-8">
+          {children}
+        </main>
+      </div>
+
+      {/* Mobile Drawer Overlay */}
+      {open && (
+        <div className="fixed inset-0 z-50 md:hidden animate-in fade-in duration-200">
+          <div
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+          <aside className="relative h-full w-72 shadow-2xl animate-in slide-in-from-left duration-200">
+            <button
+              type="button"
+              aria-label="Close navigation"
+              onClick={() => setOpen(false)}
+              className="absolute right-3 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-xl bg-white text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#0f172a] shadow-xs cursor-pointer"
+            >
+              ✕
+            </button>
+            <Sidebar user={effectiveUser} onLogout={onLogout} onNavigate={() => setOpen(false)} />
+          </aside>
+        </div>
+      )}
+
+      {/* Mobile Bottom Navigation Bar */}
+      <MobileNavigation role={effectiveUser.role} />
+    </div>
+  );
 }

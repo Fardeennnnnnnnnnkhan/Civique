@@ -31,14 +31,28 @@ export async function findDuplicateIncident(
   longitude: number,
   thresholdMeters: number = 100
 ) {
-  // Proximity duplicate check: Find active incidents of the same category in the database
+  // Keep the duplicate lookup bounded. Loading every active incident into the
+  // transaction made report submissions progressively slower as the city grew,
+  // eventually causing Prisma's interactive transaction to expire (P2028).
+  // A small geographic bounding box is a safe pre-filter; the Haversine check
+  // below remains the final decision.
+  const latDelta = thresholdMeters / 111_320;
+  const cosLatitude = Math.max(Math.cos((latitude * Math.PI) / 180), 0.1);
+  const lngDelta = thresholdMeters / (111_320 * cosLatitude);
+
   const activeIncidents = await tx.incident.findMany({
     where: {
       category,
       status: {
         notIn: ['RESOLVED', 'REJECTED'],
       },
+      latitude: { gte: latitude - latDelta, lte: latitude + latDelta },
+      longitude: { gte: longitude - lngDelta, lte: longitude + lngDelta },
     },
+    // The closest candidates are all that can be relevant for a 100m check.
+    // Ordering also makes this deterministic when a city has a dense backlog.
+    orderBy: { createdAt: 'desc' },
+    take: 250,
   });
 
   // Find if any incident lies within thresholdMeters

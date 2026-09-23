@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import { UserRole } from '@prisma/client';
+import { canReadIncident, canTriage, PolicyActor } from './policies';
+
+const incident = { cityId: 'city-a', zoneId: 'zone-a', wardId: 'ward-a', departmentId: 'dept-a', assignedTo: 'worker-a', triageOwnerId: 'officer-a' };
+const actor = (role: UserRole, overrides: Partial<PolicyActor> = {}): PolicyActor => ({ id: 'user-a', role, cityId: null, zoneId: null, wardId: null, departmentId: null, active: true, ...overrides });
+assert.equal(canReadIncident(actor(UserRole.CITIZEN), incident, true), true);
+assert.equal(canReadIncident(actor(UserRole.CITIZEN), incident, false), false);
+assert.equal(canReadIncident(actor(UserRole.FIELD_WORKER, { id: 'worker-a' }), incident), true);
+assert.equal(canReadIncident(actor(UserRole.FIELD_WORKER, { id: 'worker-b' }), incident), false);
+assert.equal(canReadIncident(actor(UserRole.WARD_OFFICER, { wardId: 'ward-a' }), incident), true);
+assert.equal(canReadIncident(actor(UserRole.WARD_OFFICER, { wardId: 'ward-b' }), incident), false);
+assert.equal(canReadIncident(actor(UserRole.DEPARTMENT_HEAD, { cityId: 'city-a', departmentId: 'dept-a' }), incident), true);
+assert.equal(canReadIncident(actor(UserRole.DEPARTMENT_HEAD, { cityId: 'city-b', departmentId: 'dept-a' }), incident), false);
+assert.equal(canReadIncident(actor(UserRole.ZONAL_OFFICER, { zoneId: 'zone-a' }), incident), true);
+assert.equal(canReadIncident(actor(UserRole.COMMISSIONER, { cityId: 'city-b' }), incident), false);
+assert.equal(canReadIncident(actor(UserRole.SUPER_ADMIN), incident), true);
+assert.equal(canTriage(actor(UserRole.WARD_OFFICER, { id: 'officer-a', wardId: 'ward-a' }), incident), true);
+assert.equal(canTriage(actor(UserRole.WARD_OFFICER, { id: 'officer-b', wardId: 'ward-a' }), incident), false);
+console.log('Row-level RBAC policy matrix tests passed');

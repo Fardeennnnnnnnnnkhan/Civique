@@ -1,4 +1,8 @@
-# Civique Correct Implementation Plan
+# Civique Execution and Acceptance Companion
+
+> **Document role:** Detailed correction tasks and acceptance checks for the active implementation sequence. [`../Implementation.md`](../Implementation.md) is the sole authoritative product, architecture, security, UX, and module specification. Conflicts must be reconciled in favor of the master specification before implementation continues.
+
+> **Status authority:** Current module status and verification evidence are recorded in [`ACCEPTANCE_MATRIX.md`](ACCEPTANCE_MATRIX.md). Historical completion language here is not production acceptance.
 
 > **Status:** Proposed implementation sequence; implementation requires module-by-module approval.  
 > **Last updated:** 2026-08-30  
@@ -7,12 +11,12 @@
 
 ## 1. Purpose
 
-This document is the authoritative execution plan for correcting and completing Civique.
+This document translates the master specification into correction tasks and acceptance checks for the current repository. It is not a competing source of product requirements or module status.
 
 The repository contains meaningful prototype implementation across M1–M13, but the previous completion labels did not consistently prove security, privacy, state-machine correctness, production readiness, or acceptance criteria. Civique will therefore proceed in two stages:
 
 1. Correct and formally accept M0–M13, one module at a time.
-2. Implement M14–M21 only after the corrected foundation passes its gates.
+2. Implement M14–M25 only after the corrected foundation passes its gates, following the releases defined in the master specification.
 
 No module is complete merely because its UI renders or an endpoint exists.
 
@@ -132,7 +136,7 @@ The product specification exists, but completion records contradict code and omi
 
 ### Goal
 
-Create one accurate source of truth before further feature implementation.
+Create and reconcile one authoritative master specification before further feature implementation.
 
 ### Deliverables
 
@@ -143,6 +147,7 @@ Create one accurate source of truth before further feature implementation.
 - Define lifecycle command ownership and the module dependency graph.
 - Adopt the Definition of Done from this document.
 - Record approved architectural decisions.
+- Add and maintain the module evidence registry in `docs/ACCEPTANCE_MATRIX.md`.
 
 ### Tests and Review
 
@@ -569,6 +574,9 @@ Replace Gemini and pseudo-classification with auditable Groq multimodal analysis
 - Configure `GROQ_API_KEY`, `GROQ_MODEL=qwen/qwen3.8-27b`, timeouts, feature flags, and spending/rate caps.
 - Create safe local derivatives before any provider call.
 - Use strict JSON Schema for category, evidence relevance, observed facts, uncertainty, quality flags, confidence band, and alternatives.
+- Require separate `civic_relevance`, `decision`, and `authenticity` fields. An authentic but irrelevant logo, advertisement, document, screenshot, product, or unrelated image must be rejected as non-civic evidence; authenticity alone must never imply civic validity.
+- Generate image-specific follow-up questions only for `ACCEPT` or `REVIEW_REQUIRED`; rejected evidence must return no questions and a citizen-safe replacement-evidence message.
+- Present those questions in a dedicated pre-insight citizen dialog. Each question must expose exactly three answer choices; the selected answers are sent in a second Groq pass before detailed insights are shown.
 - Use low-latency instruct mode for intake classification.
 - Add `AiAnalysis` and prompt/schema version metadata.
 - Queue final classification after report persistence.
@@ -587,6 +595,7 @@ Replace Gemini and pseudo-classification with auditable Groq multimodal analysis
 
 - Active analysis records `qwen/qwen3.8-27b` and all provenance.
 - Reports persist when Groq is unavailable.
+- Draft UI and post-persistence worker prevent rejected non-civic evidence from being applied as a civic report; ambiguous evidence remains reviewable.
 - AI suggestions are traceable and overridable.
 - Gemini is no longer part of the active or planned architecture.
 
@@ -790,6 +799,12 @@ Forecast civic hotspots responsibly with measurable accuracy and explicit uncert
 - Selected forecasting beats the documented held-out baseline.
 - Every prediction includes uncertainty and provenance.
 - Forecast failure never interrupts core reporting.
+
+---
+
+# Stage D — Civic Participation, Interoperability, and Expansion M22–M25
+
+The authoritative scope and acceptance requirements for M22 Civique Socio Publishing, M23 Engagement and Moderation, M24 Government and Channel Integrations, and M25 Multi-City Control Plane are defined in `Implementation.md`. Detailed execution checklists for these modules must be added here only when their prerequisite release gates pass; their absence from the active P0 checklist does not authorize early implementation.
 
 ---
 

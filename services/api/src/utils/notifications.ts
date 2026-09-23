@@ -1,5 +1,6 @@
 import { prisma } from '../db';
 import { getIO } from './socket';
+import { enqueueJob } from '../jobs/queue';
 
 /**
  * Creates an in-app notification in the database and dispatches it in real time
@@ -14,37 +15,38 @@ export async function createNotification(
   idempotencyKey?: string
 ) {
   try {
-    const prefs = await (prisma as any).notificationPreference.findUnique({ where: { userId } }).catch(() => null);
-    if (prefs && prefs.inApp === false) return undefined as any;
     if (idempotencyKey) {
       const existing = await (prisma.notification as any).findUnique({ where: { idempotencyKey } });
       if (existing) return existing;
     }
-    // 1. Save notification to database
-    const notification = await (prisma.notification as any).create({
-      data: {
-        userId,
-        title,
-        message,
-        type,
-        incidentId: incidentId || null,
-        read: false
-        , idempotencyKey: idempotencyKey || null
+    const prefs = await (prisma as any).notificationPreference.upsert({ where: { userId }, update: {}, create: { userId } });
+    const notification = await prisma.$transaction(async (tx) => {
+      const created = await (tx.notification as any).create({ data: { userId, title, message, type, incidentId: incidentId || null, read: false, idempotencyKey: idempotencyKey || null } });
+      if (prefs.inApp !== false) {
+        await (tx as any).deliveryAttempt.upsert({ where: { notificationId_channel: { notificationId: created.id, channel: 'IN_APP' } }, update: { status: 'SENT', attemptCount: { increment: 1 }, sentAt: new Date() }, create: { notificationId: created.id, channel: 'IN_APP', status: 'SENT', attemptCount: 1, sentAt: new Date() } });
       }
+      for (const channel of [prefs.email ? 'EMAIL' : null, prefs.sms ? 'SMS' : null].filter(Boolean) as string[]) {
+        await (tx as any).deliveryAttempt.create({ data: { notificationId: created.id, channel, status: 'QUEUED' } });
+        await enqueueJob(tx, { type: 'NOTIFICATION_DELIVERY', payload: { notificationId: created.id, channel }, idempotencyKey: `notification:${created.id}:${channel}` });
+      }
+      return created;
     });
-    await (prisma as any).deliveryAttempt.upsert({ where: { notificationId_channel: { notificationId: notification.id, channel: 'IN_APP' } }, update: { status: 'SENT', attemptCount: { increment: 1 }, sentAt: new Date() }, create: { notificationId: notification.id, channel: 'IN_APP', status: 'SENT', attemptCount: 1, sentAt: new Date() } });
 
-    // 2. Broadcast via Socket.io to the specific user's room
-    try {
-      const io = getIO();
-      io.to(`user:${userId}`).emit('notification:received', notification);
-      console.log(`[Socket] Dispatched notification:received to user room: ${userId}`);
-    } catch (socketErr) {
-      console.warn('[Socket] Socket.io not active or user room emit failed:', socketErr);
+    if (prefs.inApp !== false) {
+      try {
+        const io = getIO();
+        io.to(`user:${userId}`).emit('notification:received', notification);
+      } catch (socketErr) {
+        console.warn('[Socket] Socket.io not active or user room emit failed:', socketErr);
+      }
     }
 
     return notification;
   } catch (error) {
+    if (idempotencyKey) {
+      const existing = await (prisma.notification as any).findUnique({ where: { idempotencyKey } }).catch(() => null);
+      if (existing) return existing;
+    }
     console.error('[Notification Engine] Failed to create notification:', error);
     throw error;
   }

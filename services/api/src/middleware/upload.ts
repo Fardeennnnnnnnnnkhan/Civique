@@ -1,5 +1,6 @@
 import multer from 'multer';
 import crypto from 'crypto';
+import sharp from 'sharp';
 
 // Use memory storage to process file buffers directly without local disk writes
 const storage = multer.memoryStorage();
@@ -33,4 +34,25 @@ export function validateImageBuffer(buffer: Buffer, declaredMime?: string): Vali
   else if (buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') mimeType = 'image/webp';
   if (!mimeType || (declaredMime && declaredMime !== mimeType)) throw new Error('INVALID_IMAGE_CONTENT');
   return { mimeType, sha256: crypto.createHash('sha256').update(buffer).digest('hex') };
+}
+
+export type NormalizedImage = ValidatedImage & { buffer: Buffer; original: ValidatedImage };
+
+/** Decode untrusted input with bounded pixels and produce a metadata-free display/AI derivative. */
+export async function normalizeImageBuffer(buffer: Buffer, declaredMime?: string): Promise<NormalizedImage> {
+  const original = validateImageBuffer(buffer, declaredMime);
+  const image = sharp(buffer, { failOn: 'error', limitInputPixels: 40_000_000, animated: false });
+  const metadata = await image.metadata();
+  if (!metadata.width || !metadata.height || metadata.width < 64 || metadata.height < 64) throw new Error('IMAGE_DIMENSIONS_TOO_SMALL');
+  if ((metadata.pages || 1) !== 1) throw new Error('ANIMATED_IMAGE_NOT_ALLOWED');
+  if (metadata.width * metadata.height > 40_000_000) throw new Error('IMAGE_PIXEL_LIMIT_EXCEEDED');
+  const derivative = await image.rotate().resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true }).webp({ quality: 84, effort: 4 }).toBuffer({ resolveWithObject: true });
+  return {
+    buffer: derivative.data,
+    mimeType: 'image/webp',
+    sha256: crypto.createHash('sha256').update(derivative.data).digest('hex'),
+    width: derivative.info.width,
+    height: derivative.info.height,
+    original: { ...original, width: metadata.width, height: metadata.height },
+  };
 }

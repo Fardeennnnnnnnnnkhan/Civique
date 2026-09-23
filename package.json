@@ -9,13 +9,20 @@
     "packages/*"
   ],
   "scripts": {
+    "dev": "node scripts/dev-stack.mjs",
+    "dev:infra": "docker compose up -d postgres",
     "dev:api": "npm run dev --workspace=services/api",
     "dev:web": "npm run dev --workspace=apps/web",
     "dev:worker": "npm run dev --workspace=services/worker",
     "build:web": "npm run build --workspace=apps/web",
     "build:api": "npm run build --workspace=services/api",
+    "build:worker": "npm run build --workspace=services/worker",
+    "test": "npm test --workspace=services/api && npm test --workspace=services/worker",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present"
+    "lint": "npm run lint --workspaces --if-present",
+    "health:check": "node scripts/check-readiness.mjs",
+    "verify:m1": "npm test && npm run typecheck && npm run lint && npm run build:api && npm run build:worker && npm run build:web",
+    "verify:overall": "npm test && npm run typecheck && npm run lint && npm run build:api && npm run build:worker && npm run build:web"
   },
   "devDependencies": {
     "typescript": "^5.3.3"

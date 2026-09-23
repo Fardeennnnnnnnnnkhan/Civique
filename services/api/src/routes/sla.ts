@@ -2,12 +2,35 @@ import { Router, Response } from 'express';
 import { UserRole } from '@prisma/client';
 import { prisma } from '../db';
 import { AuthenticatedRequest, authenticateJWT, requireRole } from '../middleware/auth';
-import { evaluateDurableSla } from '../services/durableSla';
+import { evaluateDurableSla, pauseIncidentSla, resumeIncidentSla } from '../services/durableSla';
 
 const router = Router();
 const roles = [UserRole.DEPARTMENT_HEAD, UserRole.ZONAL_OFFICER, UserRole.COMMISSIONER, UserRole.CITY_ADMIN, UserRole.SUPER_ADMIN];
 
 router.post('/evaluate', authenticateJWT, requireRole([UserRole.CITY_ADMIN, UserRole.COMMISSIONER, UserRole.SUPER_ADMIN]), async (_req, res) => res.json({ success: true, data: await evaluateDurableSla() }));
+
+router.post('/:incidentId/pause', authenticateJWT, requireRole([UserRole.DEPARTMENT_HEAD, UserRole.ZONAL_OFFICER, UserRole.COMMISSIONER, UserRole.CITY_ADMIN, UserRole.SUPER_ADMIN]), async (req, res) => {
+  try {
+    const actor = await prisma.user.findUnique({ where: { id: (req as AuthenticatedRequest).user!.id }, select: { role: true, cityId: true, zoneId: true, departmentId: true } });
+    const incident = await prisma.incident.findUnique({ where: { id: req.params.incidentId }, select: { cityId: true, zoneId: true, departmentId: true } });
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    if (!reason || reason.length < 3) return res.status(400).json({ success: false, error: { code: 'REASON_REQUIRED', message: 'A pause reason of at least 3 characters is required.' } });
+    if (!actor || !incident || (actor.role !== UserRole.SUPER_ADMIN && ((actor.role === UserRole.CITY_ADMIN || actor.role === UserRole.COMMISSIONER) ? actor.cityId !== incident.cityId : actor.role === UserRole.ZONAL_OFFICER ? actor.zoneId !== incident.zoneId : actor.departmentId !== incident.departmentId))) return res.status(403).json({ success: false, error: { code: 'SCOPE_DENIED', message: 'You cannot pause an SLA outside your assigned scope.' } });
+    const sla = await pauseIncidentSla(req.params.incidentId, reason);
+    res.json({ success: true, sla });
+  } catch (error: any) {
+    res.status(error.message === 'SLA_NOT_FOUND' ? 404 : 500).json({ success: false, error: { code: error.message || 'SLA_PAUSE_FAILED', message: 'Unable to pause the incident SLA.' } });
+  }
+});
+
+router.post('/:incidentId/resume', authenticateJWT, requireRole([UserRole.DEPARTMENT_HEAD, UserRole.ZONAL_OFFICER, UserRole.COMMISSIONER, UserRole.CITY_ADMIN, UserRole.SUPER_ADMIN]), async (req, res) => {
+  try {
+    const sla = await resumeIncidentSla(req.params.incidentId);
+    res.json({ success: true, sla });
+  } catch (error: any) {
+    res.status(error.message === 'SLA_NOT_FOUND' ? 404 : 500).json({ success: false, error: { code: error.message || 'SLA_RESUME_FAILED', message: 'Unable to resume the incident SLA.' } });
+  }
+});
 
 router.get('/policies', authenticateJWT, requireRole(roles), async (req: AuthenticatedRequest, res: Response) => {
   const actor = await prisma.user.findUnique({ where: { id: req.user!.id } });

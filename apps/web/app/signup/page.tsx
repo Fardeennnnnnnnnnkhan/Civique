@@ -1,46 +1,30 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { FiEye, FiEyeOff, FiCheck, FiX, FiAlertCircle } from 'react-icons/fi';
+import { useRouter } from 'next/navigation';
+import { FiEye, FiEyeOff, FiCheck, FiAlertCircle, FiArrowRight, FiUser, FiMail, FiLock } from 'react-icons/fi';
+import { apiFetch } from '../../lib/api/client';
 
 export default function SignUpPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState('CITIZEN');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-  const [strength, setStrength] = useState({ text: 'Weak', level: 1, color: 'bg-error' });
+  const router = useRouter();
 
-  // Robust API Base URL resolver
-  const getApiUrl = (path: string) => {
-    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
-    const cleanBase = base.endsWith('/api/v1') ? base : `${base}/api/v1`;
-    return `${cleanBase}${path}`;
-  };
-
-  // Calculate password strength
-  useEffect(() => {
-    if (!password) {
-      setStrength({ text: 'Weak', level: 1, color: 'bg-error' });
-      return;
-    }
-
+  const strength = useMemo(() => {
     let score = 0;
     if (password.length >= 8) score++;
     if (/[A-Z]/.test(password)) score++;
     if (/[0-9]/.test(password) || /[^A-Za-z0-9]/.test(password)) score++;
-    
-    if (score === 0 || score === 1) {
-      setStrength({ text: 'Weak', level: 1, color: 'bg-error' });
-    } else if (score === 2) {
-      setStrength({ text: 'Medium', level: 2, color: 'bg-[#EF6820]' });
-    } else {
-      setStrength({ text: 'Strong', level: 3, color: 'bg-[#12B76A]' });
-    }
+    if (score <= 1) return { text: 'Weak', level: 1, color: 'bg-rose-500' };
+    if (score === 2) return { text: 'Medium', level: 2, color: 'bg-amber-500' };
+    return { text: 'Strong', level: 3, color: 'bg-[#143527]' };
   }, [password]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,243 +42,370 @@ export default function SignUpPage() {
       return;
     }
 
-    const targetUrl = getApiUrl('/auth/register');
-
+    setIsLoading(true);
     try {
-      const response = await fetch(targetUrl, {
+      await apiFetch<{ user: { id: string; email: string; role: string } }>('/auth/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, role }),
+        body: JSON.stringify({ email, password }),
       });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setSuccessMsg('Account created successfully! Redirecting...');
-        localStorage.setItem('accessToken', data.data.accessToken);
-        localStorage.setItem('refreshToken', data.data.refreshToken);
-        localStorage.setItem('user', JSON.stringify(data.data.user));
-        
-        setTimeout(() => {
-          window.location.href = '/signin';
-        }, 1500);
-      } else {
-        setErrorMsg(data.error?.message || 'Registration failed');
-      }
+      setSuccessMsg('Citizen profile confirmed! Entering Civique...');
+      setTimeout(() => router.push('/'), 400);
     } catch (err) {
-      setErrorMsg('Unable to connect to the server at ' + targetUrl);
+      setErrorMsg(err instanceof Error ? err.message : 'Registration failed or server unavailable');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex w-full min-h-screen bg-[#faf9f6]">
-      {/* LEFT SIDE: Brand Storytelling Panel */}
-      <div className="hidden lg:flex lg:w-1/2 relative bg-[#5E1801] flex-col justify-between p-16 overflow-hidden">
-        {/* Architectural background overlay */}
-        <div 
-          className="absolute inset-0 z-0 opacity-15 mix-blend-overlay bg-cover bg-center" 
-          style={{ backgroundImage: "url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80')" }}
-        ></div>
+    <div className="flex h-screen w-full bg-white text-[#192b21] font-sans antialiased overflow-hidden select-none">
+      
+      {/* ================= LEFT SECTION: REGISTRATION STATION ================= */}
+      <div className="flex flex-col justify-between w-full lg:w-1/2 h-full px-6 sm:px-10 lg:px-12 xl:px-16 py-4 sm:py-5 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         
-        <div className="relative z-10 flex flex-col h-full justify-between items-start">
-          {/* Large Logo Card to make text fully legible */}
-          <div className="bg-white p-2 rounded-2xl shadow-xl inline-block w-fit">
-            <img 
-              src="/civique.png" 
-              alt="Civique Logo" 
-              className="h-28 w-auto object-contain"
-            />
-          </div>
+        {/* Top-Left: Techno-Styled Civique Logo Only */}
+        <div className="flex items-center shrink-0">
+          <Link href="/" className="inline-flex items-center select-none group cursor-pointer" title="Civique Platform">
+            <span
+              style={{
+                fontFamily: 'var(--font-orbitron), sans-serif',
+                letterSpacing: '0.07em',
+              }}
+              className="text-2xl sm:text-[1.8rem] font-black tracking-wide text-[#143527] group-hover:text-black transition-colors"
+            >
+              Civique
+            </span>
+          </Link>
+        </div>
+
+        {/* Center: Sign Up Form Box */}
+        <div className="mx-auto w-full max-w-[390px] my-auto py-2">
           
-          <div className="max-w-lg my-12 text-left">
-            <h2 className="text-4xl font-light mb-6 text-[#f2ddbb] leading-tight tracking-wide">Empowering modern civic management.</h2>
-            <p className="text-lg text-white/90 font-light leading-relaxed">
-              Join the next generation platform built for clarity, performance, and trust. Connect your community with tools designed for tomorrow.
+          {/* Header Typography */}
+          <div className="text-center space-y-1 mb-4">
+            <h1 className="text-2xl sm:text-[1.7rem] font-black tracking-tight text-[#192b21]">
+              Create Account
+            </h1>
+            <p className="text-xs text-[#667a6e] font-medium">
+              Join Civique to report and verify municipal resolutions
             </p>
           </div>
-          
-          <div className="border-t border-white/20 pt-8 flex items-center gap-6 w-full">
-            <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-[#f2ddbb] shadow-md bg-white">
-              <img 
-                className="w-full h-full object-cover" 
-                alt="Sarah Jenkins Profile"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuCqQDfiBYpLp6injfDVvSLJjXvND0ajvh9vrLnPe1DmKQJsebx7NMi1bcwapw7jU190pnxzC4xxQ6qz4aSC7oeZpFD8BYxr1GQ-RaDuN4-WYEikpROE_JKEGWMZzT_G3A4IHVM-jTK1D1jNLJGQj3kylaKUoCuz8A-2zYHH1kE83mZEzXc3SKfyfCPMAXD13UrOkGDqrHKiMcHX_Bsp3wsZt5IyCRxzpgzTyfQGpbLVt6iQvlR5mSEilA"
-              />
-            </div>
-            <div>
-              <p className="font-light text-white italic">"A complete paradigm shift for our operations."</p>
-              <p className="text-xs text-[#f4e0be]/80 font-light mt-1">Sarah Jenkins, Director of Urban Planning</p>
-            </div>
-          </div>
-        </div>
-        <div className="absolute bottom-0 right-0 w-64 h-64 bg-[#f2ddbb] rounded-tl-full opacity-10 mix-blend-plus-lighter blur-2xl"></div>
-      </div>
 
-      {/* RIGHT SIDE: Signup Form Area */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-[#faf9f6] z-10">
-        <div className="w-full max-w-md space-y-6">
-          {/* Logo prominently displayed at the top of the form */}
-          <div className="flex justify-start">
-            <img 
-              src="/civique.png" 
-              alt="Civique Logo" 
-              className="h-28 w-auto object-contain" 
-            />
-          </div>
-
-          <div className="space-y-1.5 text-left">
-            <h2 className="text-2xl text-primary font-light tracking-tight">Create your account</h2>
-            <p className="text-text-secondary text-sm font-light">Enter your details below to register.</p>
-          </div>
-
-          <form className="space-y-4 w-full" onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} className="space-y-3">
             {errorMsg && (
-              <div className="p-4 bg-red-50 border border-red-200 text-error rounded-xl text-sm flex items-center gap-2">
-                <FiAlertCircle className="text-lg flex-shrink-0" />
-                <span className="font-light">{errorMsg}</span>
+              <div className="flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700 animate-in fade-in">
+                <FiAlertCircle className="size-4 shrink-0 text-rose-600" />
+                <span>{errorMsg}</span>
               </div>
             )}
+
             {successMsg && (
-              <div className="p-4 bg-green-50 border border-green-200 text-status-resolved rounded-xl text-sm flex items-center gap-2">
-                <FiCheck className="text-lg flex-shrink-0" />
-                <span className="font-light">{successMsg}</span>
+              <div className="flex items-center gap-2 rounded-2xl border border-[#d6e5da] bg-[#f2f7f4] p-3 text-xs font-semibold text-[#143527] animate-in fade-in">
+                <FiCheck className="size-4 shrink-0 text-[#143527]" />
+                <span>{successMsg}</span>
               </div>
             )}
 
-            <div className="space-y-1">
-              <label className="block font-light text-text-primary text-[10px] tracking-wider uppercase" htmlFor="fullName">Full Name</label>
-              <input 
-                className="premium-input w-full px-4 py-3 text-on-surface placeholder-text-muted text-sm font-light" 
-                id="fullName" 
-                placeholder="Jane Doe" 
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-              />
+            {/* Full Name */}
+            <div className="space-y-1 text-left">
+              <label htmlFor="signup-name" className="block text-xs font-bold text-[#192b21]">
+                Full Name <span className="text-[#143527]">*</span>
+              </label>
+              <div className="flex h-10 sm:h-11 w-full items-center gap-3 rounded-full border border-[#dce2d6] bg-white px-4 shadow-2xs transition-all focus-within:border-[#143527] focus-within:ring-2 focus-within:ring-[#143527]/20">
+                <FiUser className="size-4 text-[#8a9b8e] shrink-0" />
+                <input
+                  id="signup-name"
+                  type="text"
+                  required
+                  placeholder="Rahul Sharma"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full bg-transparent text-xs sm:text-sm font-medium text-[#192b21] placeholder:text-[#9ca8a0] focus:outline-none"
+                />
+              </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="block font-light text-text-primary text-[10px] tracking-wider uppercase" htmlFor="email">Email Address</label>
-              <input 
-                className="premium-input w-full px-4 py-3 text-on-surface placeholder-text-muted text-sm font-light" 
-                id="email" 
-                placeholder="jane.doe@example.com" 
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+            {/* Email Input */}
+            <div className="space-y-1 text-left">
+              <label htmlFor="signup-email" className="block text-xs font-bold text-[#192b21]">
+                Email Address <span className="text-[#143527]">*</span>
+              </label>
+              <div className="flex h-10 sm:h-11 w-full items-center gap-3 rounded-full border border-[#dce2d6] bg-white px-4 shadow-2xs transition-all focus-within:border-[#143527] focus-within:ring-2 focus-within:ring-[#143527]/20">
+                <FiMail className="size-4 text-[#8a9b8e] shrink-0" />
+                <input
+                  id="signup-email"
+                  type="email"
+                  required
+                  placeholder="citizen@civique.local"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-transparent text-xs sm:text-sm font-medium text-[#192b21] placeholder:text-[#9ca8a0] focus:outline-none"
+                />
+              </div>
             </div>
 
-            {/* Role dropdown select field */}
-            <div className="space-y-1">
-              <label className="block font-light text-text-primary text-[10px] tracking-wider uppercase" htmlFor="role">Account Role</label>
-              <select 
-                className="premium-input w-full px-4 py-3 text-on-surface text-sm font-light bg-white focus:border-[#CCB999]" 
-                id="role"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-              >
-                <option value="CITIZEN">Citizen</option>
-                <option value="CITY_ADMIN">City Administrator</option>
-                <option value="ZONE_OFFICER">Zone Officer</option>
-                <option value="WARD_OFFICER">Ward Officer</option>
-                <option value="DEPARTMENT_HEAD">Department Head</option>
-                <option value="FIELD_WORKER">Field Worker</option>
-                <option value="HELP_DESK">Help Desk Agent</option>
-                <option value="SUPER_ADMIN">Super Administrator</option>
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="block font-light text-text-primary text-[10px] tracking-wider uppercase" htmlFor="password">Password</label>
-              <div className="relative">
-                <input 
-                  className="premium-input w-full px-4 py-3 text-on-surface placeholder-text-muted pr-10 text-sm font-light" 
-                  id="password" 
-                  placeholder="••••••••" 
+            {/* Password Input */}
+            <div className="space-y-1 text-left">
+              <label htmlFor="signup-password" className="block text-xs font-bold text-[#192b21]">
+                Password <span className="text-[#143527]">*</span>
+              </label>
+              <div className="flex h-10 sm:h-11 w-full items-center gap-3 rounded-full border border-[#dce2d6] bg-white px-4 shadow-2xs transition-all focus-within:border-[#143527] focus-within:ring-2 focus-within:ring-[#143527]/20">
+                <FiLock className="size-4 text-[#8a9b8e] shrink-0" />
+                <input
+                  id="signup-password"
                   type={showPassword ? 'text' : 'password'}
+                  required
+                  placeholder="Min 8 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-transparent text-xs sm:text-sm font-medium text-[#192b21] placeholder:text-[#9ca8a0] focus:outline-none"
                 />
-                <button 
-                  aria-label="Toggle password visibility" 
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-text-muted hover:text-text-primary focus:outline-none" 
+                <button
                   type="button"
+                  aria-label="Toggle password visibility"
                   onClick={() => setShowPassword(!showPassword)}
+                  className="text-[#8a9b8e] hover:text-[#192b21] transition-colors cursor-pointer"
                 >
-                  {showPassword ? <FiEye className="text-lg" /> : <FiEyeOff className="text-lg" />}
+                  {showPassword ? <FiEyeOff className="size-4" /> : <FiEye className="size-4" />}
                 </button>
               </div>
+
+              {password.length > 0 && (
+                <div className="flex items-center justify-between px-1 pt-0.5 text-[10px] text-[#667a6e]">
+                  <span>Strength: <strong className="font-bold text-[#192b21]">{strength.text}</strong></span>
+                  <div className="h-1 w-24 rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className={`h-full ${strength.color} transition-all duration-300`}
+                      style={{ width: `${(strength.level / 3) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Password Strength Requirement Box */}
-            {password && (
-              <div className="space-y-3 bg-[#F7F4EE] p-4 rounded-xl border border-border-light">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-text-secondary font-light">Password strength: <span className="font-medium text-text-primary">{strength.text}</span></span>
-                </div>
-                <div className="flex gap-1 h-1.5 w-full rounded-full overflow-hidden bg-border-light">
-                  <div className={`h-full transition-all duration-300 ${strength.color}`} style={{ width: strength.text === 'Weak' ? '25%' : strength.text === 'Medium' ? '50%' : '100%' }}></div>
-                </div>
-                <ul className="text-xs text-text-secondary space-y-1.5 mt-1 font-light">
-                  <li className="flex items-center gap-2">
-                    {password.length >= 8 ? (
-                      <FiCheck className="text-status-resolved text-sm flex-shrink-0" />
-                    ) : (
-                      <FiX className="text-error text-sm flex-shrink-0" />
-                    )}
-                    <span>At least 8 characters</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    {/[A-Z]/.test(password) ? (
-                      <FiCheck className="text-status-resolved text-sm flex-shrink-0" />
-                    ) : (
-                      <FiX className="text-error text-sm flex-shrink-0" />
-                    )}
-                    <span>Contains uppercase letter</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    {(/[0-9]/.test(password) || /[^A-Za-z0-9]/.test(password)) ? (
-                      <FiCheck className="text-status-resolved text-sm flex-shrink-0" />
-                    ) : (
-                      <FiX className="text-error text-sm flex-shrink-0" />
-                    )}
-                    <span>Contains number or symbol</span>
-                  </li>
-                </ul>
+            {/* Confirm Password */}
+            <div className="space-y-1 text-left">
+              <label htmlFor="signup-confirm" className="block text-xs font-bold text-[#192b21]">
+                Confirm Password <span className="text-[#143527]">*</span>
+              </label>
+              <div className="flex h-10 sm:h-11 w-full items-center gap-3 rounded-full border border-[#dce2d6] bg-white px-4 shadow-2xs transition-all focus-within:border-[#143527] focus-within:ring-2 focus-within:ring-[#143527]/20">
+                <FiLock className="size-4 text-[#8a9b8e] shrink-0" />
+                <input
+                  id="signup-confirm"
+                  type="password"
+                  required
+                  placeholder="Re-enter password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full bg-transparent text-xs sm:text-sm font-medium text-[#192b21] placeholder:text-[#9ca8a0] focus:outline-none"
+                />
               </div>
-            )}
-
-            <div className="space-y-1">
-              <label className="block font-light text-text-primary text-[10px] tracking-wider uppercase" htmlFor="confirmPassword">Confirm Password</label>
-              <input 
-                className="premium-input w-full px-4 py-3 text-on-surface placeholder-text-muted text-sm font-light" 
-                id="confirmPassword" 
-                placeholder="••••••••" 
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
             </div>
 
-            <button 
-              className="premium-btn-primary w-full mt-2 py-3.5 px-6 text-sm font-light tracking-wide uppercase" 
+            {/* Primary Submit Button */}
+            <button
               type="submit"
+              disabled={isLoading}
+              className="mt-2 flex h-10 sm:h-11 w-full items-center justify-center gap-2 rounded-full bg-[#143527] hover:bg-[#0e271c] text-white font-bold text-xs sm:text-sm tracking-wide shadow-md transition-all active:scale-[0.99] cursor-pointer disabled:opacity-50"
             >
-              Create Account
+              {isLoading ? (
+                <span>Registering...</span>
+              ) : (
+                <>
+                  <span>Create Citizen Account</span>
+                  <FiArrowRight className="size-4" />
+                </>
+              )}
             </button>
           </form>
 
-          <div className="text-center pt-4 border-t border-border-light">
-            <p className="text-sm text-text-secondary font-light">
-              Already have an account?{' '}
-              <Link href="/signin" className="font-medium text-primary hover:underline underline-offset-4 decoration-[#CCB999]">
-                Sign in
-              </Link>
-            </p>
+          {/* Bottom Sign-In Link */}
+          <div className="mt-4 text-center text-xs font-medium text-[#667a6e]">
+            <span>Already have an account? </span>
+            <Link href="/signin" className="font-bold text-[#143527] underline underline-offset-4 hover:text-[#0b2419]">
+              Sign In
+            </Link>
           </div>
+
         </div>
+
+        {/* Footer Note */}
+        <p className="text-[11px] text-[#8a9b8e] text-center lg:text-left shrink-0">
+          © 2026 Civique Platform. Indore Municipal Corporation (IMC).
+        </p>
       </div>
+
+      {/* ================= RIGHT SECTION: QUOTE & ARCHITECTURAL BUILDINGS SKYLINE ================= */}
+      <div className="relative hidden lg:flex flex-col justify-between w-1/2 h-full bg-white border-l border-[#eef1ea] overflow-hidden select-none shrink-0">
+        
+        {/* Top: Pure Inspirational Civic Quote */}
+        <div className="relative z-10 px-8 xl:px-14 pt-8 xl:pt-12 max-w-xl">
+          
+          {/* Orange Opening Quote Icon */}
+          <div className="text-[#ea580c] mb-3">
+            <svg className="size-9 xl:size-10 fill-current opacity-90" viewBox="0 0 24 24">
+              <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" />
+            </svg>
+          </div>
+
+          {/* Pure Civic Quote */}
+          <div className="space-y-2">
+            <p className="text-xl xl:text-[1.6rem] font-black text-[#192b21] leading-snug tracking-tight">
+              “Every civic observation reported by a citizen brings our city one step closer to spotless streets, reliable infrastructure, and transparent public governance.”
+            </p>
+
+            {/* Closing Orange Quote Icon on Right below quote */}
+            <div className="flex justify-end pt-1 text-[#ea580c]">
+              <svg className="size-8 xl:size-9 fill-current opacity-85 rotate-180" viewBox="0 0 24 24">
+                <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" />
+              </svg>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Bottom: The Architectural Building Skyline (Anchored flush to bottom & right like Dribbble) */}
+        <div className="absolute bottom-0 right-0 w-[96%] xl:w-[92%] 2xl:w-[88%] h-[58vh] xl:h-[64vh] max-h-[620px] pointer-events-none flex items-end justify-end">
+          <svg
+            viewBox="0 0 760 500"
+            preserveAspectRatio="xMaxYMax meet"
+            className="w-full h-full select-none"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            {/* Background Skyline Buildings */}
+            <polygon
+              points="90,450 170,340 220,380 220,496 90,496"
+              fill="#d8ece4"
+              stroke="#143527"
+              strokeWidth="3.2"
+              strokeLinejoin="round"
+            />
+            <line x1="105" y1="435" x2="155" y2="375" stroke="#143527" strokeWidth="2.5" />
+            <line x1="120" y1="450" x2="170" y2="390" stroke="#143527" strokeWidth="2.5" />
+            <line x1="135" y1="465" x2="185" y2="405" stroke="#143527" strokeWidth="2.5" />
+            <line x1="150" y1="480" x2="200" y2="420" stroke="#143527" strokeWidth="2.5" />
+
+            <polygon
+              points="180,300 300,195 370,245 370,496 180,496"
+              fill="#ffffff"
+              stroke="#143527"
+              strokeWidth="3.2"
+              strokeLinejoin="round"
+            />
+            <polygon
+              points="180,300 220,260 340,165 300,195"
+              fill="#eaf4ee"
+              stroke="#143527"
+              strokeWidth="3.2"
+              strokeLinejoin="round"
+            />
+            <line x1="220" y1="320" x2="220" y2="496" stroke="#143527" strokeWidth="2" strokeDasharray="6 6" />
+            <line x1="250" y1="300" x2="250" y2="496" stroke="#143527" strokeWidth="2" strokeDasharray="6 6" />
+            <line x1="280" y1="280" x2="280" y2="496" stroke="#143527" strokeWidth="2" strokeDasharray="6 6" />
+            <line x1="310" y1="260" x2="310" y2="496" stroke="#143527" strokeWidth="2" strokeDasharray="6 6" />
+            <line x1="340" y1="270" x2="340" y2="496" stroke="#143527" strokeWidth="2" strokeDasharray="6 6" />
+
+            <polygon
+              points="370,245 450,205 450,496 370,496"
+              fill="#ffffff"
+              stroke="#143527"
+              strokeWidth="3.2"
+              strokeLinejoin="round"
+            />
+            <line x1="390" y1="265" x2="390" y2="485" stroke="#143527" strokeWidth="2.5" strokeDasharray="8 6" />
+            <line x1="410" y1="255" x2="410" y2="485" stroke="#143527" strokeWidth="2.5" strokeDasharray="8 6" />
+            <line x1="430" y1="245" x2="430" y2="485" stroke="#143527" strokeWidth="2.5" strokeDasharray="8 6" />
+
+            {/* Central Hero Skyscraper */}
+            <polygon
+              points="450,160 565,90 565,496 450,496"
+              fill="#fcfcf8"
+              stroke="#143527"
+              strokeWidth="3.5"
+              strokeLinejoin="round"
+            />
+            <polygon
+              points="565,90 635,130 635,496 565,496"
+              fill="#f7f6ec"
+              stroke="#143527"
+              strokeWidth="3.5"
+              strokeLinejoin="round"
+            />
+            <polygon
+              points="450,160 510,80 625,20 565,90"
+              fill="#e8f3ec"
+              stroke="#143527"
+              strokeWidth="3.5"
+              strokeLinejoin="round"
+            />
+
+            <line x1="475" y1="190" x2="475" y2="485" stroke="#ea580c" strokeWidth="3.2" strokeDasharray="10 8" strokeLinecap="round" />
+            <line x1="500" y1="175" x2="500" y2="485" stroke="#ea580c" strokeWidth="3.2" strokeDasharray="10 8" strokeLinecap="round" />
+            <line x1="525" y1="160" x2="525" y2="485" stroke="#ea580c" strokeWidth="3.2" strokeDasharray="10 8" strokeLinecap="round" />
+            <line x1="548" y1="145" x2="548" y2="485" stroke="#ea580c" strokeWidth="3.2" strokeDasharray="10 8" strokeLinecap="round" />
+
+            {/* Rightmost Skyscraper */}
+            <polygon
+              points="635,130 730,175 730,496 635,496"
+              fill="#ffffff"
+              stroke="#143527"
+              strokeWidth="3.5"
+              strokeLinejoin="round"
+            />
+            <polygon
+              points="730,175 760,195 760,496 730,496"
+              fill="#f4f7f4"
+              stroke="#143527"
+              strokeWidth="3.5"
+              strokeLinejoin="round"
+            />
+            <polygon
+              points="635,130 680,95 760,140 730,175"
+              fill="#e8f3ec"
+              stroke="#143527"
+              strokeWidth="3.5"
+              strokeLinejoin="round"
+            />
+            <line x1="665" y1="190" x2="665" y2="496" stroke="#143527" strokeWidth="2.2" strokeDasharray="8 6" />
+            <line x1="695" y1="210" x2="695" y2="496" stroke="#143527" strokeWidth="2.2" strokeDasharray="8 6" />
+            <line x1="745" y1="230" x2="745" y2="496" stroke="#143527" strokeWidth="2.2" strokeDasharray="8 6" />
+
+            {/* Foreground Pavilion */}
+            <polygon
+              points="330,385 420,335 420,496 330,496"
+              fill="#fae4dd"
+              stroke="#143527"
+              strokeWidth="3.2"
+              strokeLinejoin="round"
+            />
+            <line x1="345" y1="395" x2="405" y2="360" stroke="#e07a5f" strokeWidth="2.5" />
+            <line x1="345" y1="415" x2="405" y2="380" stroke="#e07a5f" strokeWidth="2.5" />
+            <line x1="345" y1="435" x2="405" y2="400" stroke="#e07a5f" strokeWidth="2.5" />
+            <line x1="345" y1="455" x2="405" y2="420" stroke="#e07a5f" strokeWidth="2.5" />
+            <line x1="345" y1="475" x2="405" y2="440" stroke="#e07a5f" strokeWidth="2.5" />
+
+            {/* Foreground Trees */}
+            <circle cx="230" cy="435" r="32" fill="#ffffff" stroke="#143527" strokeWidth="3" />
+            <line x1="230" y1="467" x2="230" y2="496" stroke="#143527" strokeWidth="3" />
+            <line x1="230" y1="425" x2="215" y2="415" stroke="#143527" strokeWidth="2.5" />
+            <line x1="230" y1="440" x2="245" y2="430" stroke="#143527" strokeWidth="2.5" />
+
+            <circle cx="640" cy="445" r="42" fill="#ffffff" stroke="#143527" strokeWidth="3.2" />
+            <line x1="640" y1="487" x2="640" y2="496" stroke="#143527" strokeWidth="3.2" />
+            <line x1="640" y1="435" x2="625" y2="425" stroke="#143527" strokeWidth="2.5" />
+            <line x1="640" y1="450" x2="655" y2="440" stroke="#143527" strokeWidth="2.5" />
+
+            <circle cx="705" cy="470" r="22" fill="#ffffff" stroke="#143527" strokeWidth="3" />
+            <line x1="705" y1="492" x2="705" y2="496" stroke="#143527" strokeWidth="3" />
+
+            {/* Baseline Ground Line */}
+            <line x1="40" y1="496" x2="760" y2="496" stroke="#143527" strokeWidth="3.5" />
+          </svg>
+        </div>
+
+      </div>
+
     </div>
   );
 }

@@ -1,67 +1,49 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { 
-  FiGrid, 
-  FiAlertCircle, 
-  FiBarChart2, 
-  FiMap, 
-  FiSettings, 
-  FiLogOut, 
-  FiMenu, 
-  FiX, 
-  FiBell, 
-  FiActivity,
-  FiUser,
-  FiFileText,
-  FiUsers
-} from 'react-icons/fi';
-import NotificationBell from '../components/NotificationBell';
-
+import { useRouter } from 'next/navigation';
+import LoadingState from '../components/LoadingState';
 import Shell from '../components/Shell';
+import { apiFetch, logout } from '../../lib/api/client';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<{ id: string; email: string; role: string } | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('accessToken');
-    if (!storedUser || !token) {
-      router.push('/signin');
-      return;
-    }
+    let active = true;
+    
+    apiFetch<{ user: { id: string; email: string; role: string } }>('/auth/me')
+      .then(({ user: currentUser }) => {
+        if (!active) return;
+        if (currentUser.role === 'CITIZEN') {
+          router.push('/');
+          return;
+        }
+        setUser(currentUser);
+        setCheckingAuth(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        router.push('/signin');
+      });
 
-    try {
-      const parsedUser = JSON.parse(storedUser);
-      if (parsedUser.role === 'CITIZEN') {
-        router.push('/');
-        return;
-      }
-      setUser(parsedUser);
-      setCheckingAuth(false);
-    } catch (e) {
-      localStorage.clear();
-      router.push('/signin');
-    }
+    return () => {
+      active = false;
+    };
   }, [router]);
 
-  const handleLogout = () => {
-    localStorage.clear();
+  const handleLogout = async () => {
+    await logout().catch(() => undefined);
+    setUser(null);
     router.push('/signin');
   };
 
   if (checkingAuth) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-white">
-        <div className="relative flex h-8 w-8">
-          <span className="animate-ping absolute inline-flex h-full w-full bg-[#5E1801] rounded-full opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-8 w-8 bg-[#5E1801]"></span>
-        </div>
+        <LoadingState />
       </div>
     );
   }
