@@ -100,6 +100,7 @@ This file is Civique's durable engineering memory. Product requirements and modu
 
 - AI is advisory and cannot independently merge, prioritize, assign, or resolve.
 - Groq `qwen/qwen3.8-27b` is configurable, preview, and replaceable through a model registry.
+- The production FastAPI ML service uses Groq for vision analysis; the legacy ConvNeXt/PyTorch fallback is local-only and is excluded from Render production dependencies to stay within constrained memory limits.
 - AI failure never blocks durable Report submission.
 - Every analysis stores provider/model/prompt/schema/input provenance, status, latency, result, failure, and override outcome.
 - “Authenticity” is expressed as manipulation-risk/evidence signals, never definitive truth or falsity.

@@ -1,0 +1,6 @@
+# Optional local-only dependencies for experimenting with the legacy
+# ConvNeXt/ImageNet fallback in app/classifier.py.
+# The production service uses the Groq vision provider and must not install
+# CUDA/PyTorch packages on constrained Render instances.
+torch>=2.0.0
+torchvision>=0.15.0

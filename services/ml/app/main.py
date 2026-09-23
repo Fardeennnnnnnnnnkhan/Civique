@@ -25,7 +25,6 @@ load_local_env()
 
 from datetime import datetime
 from fastapi import FastAPI, File, UploadFile, Form
-from app.classifier import classify_image
 from app.providers.groq import GroqProviderError, GroqVisionProvider
 
 app = FastAPI(

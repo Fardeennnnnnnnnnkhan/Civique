@@ -4,6 +4,14 @@
 
 M25 — Multi-City Control Plane
 
+## ML Render Memory Fix (2026-09-24)
+
+- [x] Removed unused NumPy/PyTorch/TorchVision production dependencies from `services/ml/requirements.txt`; the previous Render deploy downloaded CUDA/cuDNN packages and exceeded the 512 MiB runtime limit.
+- [x] Removed the unused ConvNeXt classifier import from the FastAPI startup path.
+- [x] Added `services/ml/requirements-local.txt` for optional local-only ConvNeXt experiments.
+- [x] Classifier fallback tests and Groq provider contract tests pass without PyTorch installed.
+- [ ] Redeploy the Render ML service with a cleared build cache and verify `/health` and `/api/v1/classify/category`.
+
 ## Status
 
 IMPLEMENTED — tenant control plane and isolation contracts are complete; restored-database tenant-isolation and browser evidence remain acceptance gates.
