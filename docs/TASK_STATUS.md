@@ -67,8 +67,19 @@ IMPLEMENTED — tenant control plane and isolation contracts are complete; resto
 - [x] Rethemed all auth flows (`signin`, `signup`, `forgot-password`, `reset-password`, `accept-invitation`).
 - [x] Rethemed all citizen and public screens (Landing, Report Intake studio, AI insights modal, Case details, Public map, Socio feed, Public accountability, Profile, Civic Health).
 - [x] Rethemed all admin operational cockpits (Admin dashboard, Incidents, Reports, Moderation, Priority engine, Assets, Predictions, Worker taskboard, People/Workforce, Analytics, Integrations, Geography, Tenants, Duplicates, Roles).
-- [x] Rethemed the shared Design System showroom (`/design-system`).
 - [x] Zero TypeScript compilation errors verified with `npx tsc --noEmit -p apps/web/tsconfig.json`.
+
+## Civique Socio: Twitter/X-Style Civic Timeline & Admin Notification (2026-09-24)
+
+- [x] Rebuilt `apps/web/app/socio/page.tsx` with a Twitter/X-style 3-column desktop layout (Left Navigation Rail, Main Feed Timeline, Right Trending Sidebar).
+- [x] Implemented Twitter-like cardless timeline rows with author alias `@handle`, verified opt-in badge, relative timestamps (`12m`, `3h`), category tag pills, and incident status badges.
+- [x] Built a high-engagement Twitter-style interaction action bar (Comments count, Corroborate / "I am also affected" count, Support / Heart with live optimistic toggle, Bookmark, Share link).
+- [x] Built an inline Twitter-style Post & Incident Composer with public alias customization, character limit counter, category tags, and an "Attach Incident" modal linking submitted reports.
+- [x] Redesigned single post thread view (`/socio/[postId]`) with Twitter thread styling, official municipal update cards, inline reply composer, and threaded community discussion.
+- [x] Added `GET /api/v1/socio/my-reports` endpoint for authenticated citizens to link their reported municipal issues.
+- [x] Integrated real-time administrator and ward officer notifications (`SOCIO_NEW_POST`) in `POST /api/v1/socio/publish` upon new post creation.
+- [x] Enhanced `GET /api/v1/socio` to compute live support, comment, and corroboration counts directly in SQL subqueries.
+- [x] Verified full API and Web TypeScript checks (`0 errors`) and full API test suite (`25/25 passed`).
 
 ## M13 Civic Evidence Relevance Guard (2026-09-23)
 

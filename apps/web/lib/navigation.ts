@@ -1,23 +1,28 @@
 import type { IconType } from 'react-icons';
-import { FiAlertCircle, FiBarChart2, FiClock, FiFileText, FiGrid, FiHome, FiMap, FiPlus, FiUsers, FiCompass, FiShield, FiGitMerge, FiTrendingUp } from 'react-icons/fi';
+import { FiAlertCircle, FiBarChart2, FiClock, FiFileText, FiGrid, FiHome, FiMap, FiPlus, FiUsers, FiCompass, FiShield, FiGitMerge, FiTrendingUp, FiMessageCircle } from 'react-icons/fi';
 
 export type NavigationItem = { name: string; href: string; icon: IconType };
 
 const citizen: NavigationItem[] = [
   { name: 'Home', href: '/', icon: FiHome },
+  { name: 'Socio Feed', href: '/socio', icon: FiMessageCircle },
   { name: 'Report an issue', href: '/report', icon: FiPlus },
   { name: 'Explore map', href: '/map', icon: FiMap },
+  { name: 'Civic Health', href: '/civic-health', icon: FiTrendingUp },
+  { name: 'Accountability', href: '/accountability', icon: FiBarChart2 },
   { name: 'My reports & timeline', href: '/profile', icon: FiFileText },
 ];
 
 const fieldWorker: NavigationItem[] = [
   { name: "Today's work", href: '/admin/worker', icon: FiClock },
+  { name: 'Socio Feed', href: '/socio', icon: FiMessageCircle },
   { name: 'Assigned tasks', href: '/admin/worker', icon: FiAlertCircle },
   { name: 'Work map', href: '/map', icon: FiMap },
 ];
 
 const official: NavigationItem[] = [
   { name: 'Dashboard', href: '/admin', icon: FiGrid },
+  { name: 'Socio Feed', href: '/socio', icon: FiMessageCircle },
   { name: 'Reports', href: '/admin/reports', icon: FiFileText },
   { name: 'Incidents', href: '/admin/incidents', icon: FiAlertCircle },
   { name: 'People', href: '/admin/people', icon: FiUsers },

@@ -6,7 +6,7 @@ import { isNavigationActive, navigationFor } from '../../lib/navigation';
 
 export default function MobileNavigation({ role }: { role: string }) {
   const pathname = usePathname();
-  const items = navigationFor(role).slice(0, role === 'CITIZEN' ? 4 : 4);
+  const items = navigationFor(role).slice(0, role === 'CITIZEN' ? 5 : 4);
 
   return (
     <nav

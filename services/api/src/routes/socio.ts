@@ -4,6 +4,7 @@ import { prisma } from '../db';
 import { AuthenticatedRequest, authenticateJWT, requireRole } from '../middleware/auth';
 import { logIncidentChange } from '../utils/audit';
 import { incidentScope } from '../utils/scope';
+import { notifyUsers } from '../utils/notifications';
 
 const router = Router();
 const citizens = [UserRole.CITIZEN];
@@ -24,7 +25,38 @@ router.get('/', async (req: Request, res: Response) => {
   if (!ensureEnabled(res)) return;
   const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50); const cursor = typeof req.query.cursor === 'string' ? decodeCursor(req.query.cursor) : null; const category = typeof req.query.category === 'string' ? req.query.category.toUpperCase() : null; const status = typeof req.query.status === 'string' ? req.query.status.toUpperCase() : null; const scope = typeof req.query.scope === 'string' ? req.query.scope : null;
   const clauses = ['visibility=\'PUBLIC\'', 'revoked_at IS NULL']; const params: any[] = []; if (category) { params.push(category); clauses.push(`category=$${params.length}`); } if (status) { params.push(status); clauses.push(`status=$${params.length}`); } if (scope?.startsWith('ward:')) { params.push(scope.slice(5)); clauses.push(`incident_id IN (SELECT id FROM incidents WHERE ward_id=$${params.length}::uuid)`); } if (cursor) { params.push(cursor.date, cursor.id); clauses.push(`(created_at,id)<($${params.length - 1},$${params.length}::uuid)`); } params.push(limit + 1);
-  const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT id,report_id "reportId",incident_id "incidentId",alias,redacted_text "text",generalized_latitude "latitude",generalized_longitude "longitude",category,status,publication_version "publicationVersion",created_at "createdAt" FROM socio_posts WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC,id DESC LIMIT $${params.length}`, ...params); const hasMore = rows.length > limit; const page = rows.slice(0, limit); return res.json({ success: true, data: { posts: page, pagination: { hasMore, nextCursor: hasMore ? encodeCursor(page[page.length - 1].createdAt, page[page.length - 1].id) : null }, rankingVersion: 'm22-locality-relevance-recency-v1' } });
+  const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT id,report_id "reportId",incident_id "incidentId",alias,redacted_text "text",generalized_latitude "latitude",generalized_longitude "longitude",category,status,publication_version "publicationVersion",created_at "createdAt",(SELECT COUNT(*)::int FROM socio_reactions WHERE post_id=socio_posts.id) "supports",(SELECT COUNT(*)::int FROM socio_comments WHERE post_id=socio_posts.id AND status='ACTIVE') "comments",(SELECT COUNT(*)::int FROM socio_corroborations WHERE post_id=socio_posts.id AND eligibility_status='VERIFIED') "corroborations" FROM socio_posts WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC,id DESC LIMIT $${params.length}`, ...params); const hasMore = rows.length > limit; const page = rows.slice(0, limit); return res.json({ success: true, data: { posts: page, pagination: { hasMore, nextCursor: hasMore ? encodeCursor(page[page.length - 1].createdAt, page[page.length - 1].id) : null }, rankingVersion: 'm22-locality-relevance-recency-v1' } });
+});
+
+router.get('/my-reports', authenticateJWT, requireRole(citizens), async (req: AuthenticatedRequest, res: Response) => {
+  if (!ensureEnabled(res)) return;
+  const reports = await prisma.report.findMany({
+    where: { submitterRef: req.user!.id, incidentId: { not: null } },
+    include: { incident: true },
+    orderBy: { createdAt: 'desc' },
+    take: 20
+  });
+  const reportIds = reports.map(r => r.id);
+  const publishedMap: Record<string, string> = {};
+  if (reportIds.length > 0) {
+    const posts = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT id, report_id "reportId" FROM socio_posts WHERE report_id = ANY($1::uuid[]) AND revoked_at IS NULL AND visibility = 'PUBLIC'`,
+      reportIds
+    );
+    posts.forEach(p => { publishedMap[p.reportId] = p.id; });
+  }
+  const result = reports.map(r => ({
+    id: r.id,
+    incidentId: r.incidentId,
+    publicTrackingId: r.incident?.publicTrackingId,
+    category: r.incident?.category,
+    status: r.incident?.status,
+    description: r.description,
+    createdAt: r.createdAt,
+    postId: publishedMap[r.id] || null,
+    isPublished: Boolean(publishedMap[r.id])
+  }));
+  return res.json({ success: true, data: { reports: result } });
 });
 
 router.get('/posts/:id', async (req: Request, res: Response) => { if (!ensureEnabled(res)) return; const rows = await prisma.$queryRawUnsafe<any[]>(`SELECT ${postSelect} FROM socio_posts WHERE id=$1::uuid AND visibility='PUBLIC' AND revoked_at IS NULL`, req.params.id); if (!rows[0]) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Socio post not found.' } }); const updates = await prisma.$queryRawUnsafe<any[]>('SELECT id,status,message,created_at "createdAt" FROM socio_post_updates WHERE post_id=$1::uuid ORDER BY created_at ASC,id ASC', req.params.id); const counts = await prisma.$queryRawUnsafe<any[]>(`SELECT (SELECT COUNT(*)::int FROM socio_reactions WHERE post_id=$1::uuid) supports,(SELECT COUNT(*)::int FROM socio_corroborations WHERE post_id=$1::uuid AND eligibility_status='VERIFIED') corroborations,(SELECT COUNT(*)::int FROM socio_comments WHERE post_id=$1::uuid AND status='ACTIVE') comments`, req.params.id); return res.json({ success: true, data: { post: rows[0], updates, engagement: counts[0] || { supports: 0, corroborations: 0, comments: 0 }, communityRules: { authenticatedOnly: true, aliasesOnly: true, noContactDetails: true, noPopularityPriority: true } } }); });
@@ -43,7 +75,48 @@ router.post('/publish', authenticateJWT, requireRole(citizens), async (req: Auth
   const reportId = typeof req.body?.reportId === 'string' ? req.body.reportId : ''; const consentVersion = typeof req.body?.consentVersion === 'string' ? req.body.consentVersion.trim() : ''; const alias = typeof req.body?.alias === 'string' ? req.body.alias.trim().replace(/[^A-Za-z0-9 _-]/g, '').slice(0, 40) : '';
   if (!reportId || !consentVersion || alias.length < 3) return res.status(400).json({ success: false, error: { code: 'CONSENT_REQUIRED', message: 'Report, consent version, and a public alias are required.' } });
   const report = await prisma.report.findFirst({ where: { id: reportId, submitterRef: req.user!.id, incidentId: { not: null } }, include: { incident: true } }); const incident = report?.incident; if (!report || !incident) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Owned report with an Incident is required.' } });
-  try { const result = await prisma.$transaction(async (tx) => { await tx.$executeRaw`INSERT INTO socio_aliases (user_id,alias) VALUES (${req.user!.id}::uuid,${alias}) ON CONFLICT (user_id) DO UPDATE SET alias=EXCLUDED.alias,updated_at=NOW()`; const rows = await tx.$queryRawUnsafe<any[]>('INSERT INTO socio_posts (report_id,incident_id,author_id,alias,consent_version,redacted_text,generalized_latitude,generalized_longitude,category,status) VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9,$10) RETURNING id', report.id, incident.id, req.user!.id, alias, consentVersion, redact(report.description), generalized(incident.latitude), generalized(incident.longitude), incident.category, incident.status); await tx.$executeRaw`INSERT INTO socio_publication_consents (post_id,user_id,consent_version,action) VALUES (${rows[0].id}::uuid,${req.user!.id}::uuid,${consentVersion},'PUBLISHED')`; await logIncidentChange(tx, incident.id, 'SOCIO_PUBLICATION_OPT_IN', req.user!.id, { postId: rows[0].id, consentVersion }); return rows[0]; }); return res.status(201).json({ success: true, data: { post: result } }); } catch (error: any) { return res.status(409).json({ success: false, error: { code: 'PUBLICATION_CONFLICT', message: error.message || 'Report is already published or cannot be published.' } }); }
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`INSERT INTO socio_aliases (user_id,alias) VALUES (${req.user!.id}::uuid,${alias}) ON CONFLICT (user_id) DO UPDATE SET alias=EXCLUDED.alias,updated_at=NOW()`;
+      const rows = await tx.$queryRawUnsafe<any[]>('INSERT INTO socio_posts (report_id,incident_id,author_id,alias,consent_version,redacted_text,generalized_latitude,generalized_longitude,category,status) VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9,$10) RETURNING id', report.id, incident.id, req.user!.id, alias, consentVersion, redact(report.description), generalized(incident.latitude), generalized(incident.longitude), incident.category, incident.status);
+      await tx.$executeRaw`INSERT INTO socio_publication_consents (post_id,user_id,consent_version,action) VALUES (${rows[0].id}::uuid,${req.user!.id}::uuid,${consentVersion},'PUBLISHED')`;
+      await logIncidentChange(tx, incident.id, 'SOCIO_PUBLICATION_OPT_IN', req.user!.id, { postId: rows[0].id, consentVersion });
+      return rows[0];
+    });
+
+    // Notify administrators and relevant ward officials of the new socio publication
+    try {
+      const admins = await prisma.user.findMany({
+        where: {
+          role: { in: [UserRole.SUPER_ADMIN, UserRole.CITY_ADMIN, UserRole.COMMISSIONER, UserRole.WARD_OFFICER] },
+          active: true,
+          ...(incident.wardId ? {
+            OR: [
+              { role: { in: [UserRole.SUPER_ADMIN, UserRole.CITY_ADMIN, UserRole.COMMISSIONER] } },
+              { role: UserRole.WARD_OFFICER, wardId: incident.wardId }
+            ]
+          } : {})
+        },
+        select: { id: true }
+      });
+      const adminIds = admins.map(a => a.id).filter(id => id !== req.user!.id);
+      if (adminIds.length > 0) {
+        notifyUsers(
+          adminIds,
+          'New Civic Post on Socio',
+          `Citizen @${alias} published an issue in ${incident.category.replaceAll('_', ' ')}: "${redact(report.description).slice(0, 90)}"`,
+          'SOCIO_NEW_POST',
+          incident.id
+        ).catch(err => console.error('[Socio] Admin notification failed:', err));
+      }
+    } catch (notifErr) {
+      console.error('[Socio] Error querying admins for notification:', notifErr);
+    }
+
+    return res.status(201).json({ success: true, data: { post: result } });
+  } catch (error: any) {
+    return res.status(409).json({ success: false, error: { code: 'PUBLICATION_CONFLICT', message: error.message || 'Report is already published or cannot be published.' } });
+  }
 });
 
 router.post('/posts/:id/revoke', authenticateJWT, requireRole(citizens), async (req: AuthenticatedRequest, res: Response) => { if (!ensureEnabled(res)) return; const consentVersion = typeof req.body?.consentVersion === 'string' && req.body.consentVersion.trim() ? req.body.consentVersion.trim() : 'socio-v1'; const result = await prisma.$transaction(async (tx) => { const rows = await tx.$queryRawUnsafe<any[]>('UPDATE socio_posts SET visibility=\'REVOKED\',revoked_at=NOW(),updated_at=NOW() WHERE id=$1::uuid AND author_id=$2::uuid AND revoked_at IS NULL RETURNING incident_id "incidentId"', req.params.id, req.user!.id); if (!rows[0]) return null; await tx.$executeRaw`INSERT INTO socio_publication_consents (post_id,user_id,consent_version,action) VALUES (${req.params.id}::uuid,${req.user!.id}::uuid,${consentVersion},'REVOKED')`; await logIncidentChange(tx, rows[0].incidentId, 'SOCIO_PUBLICATION_REVOKED', req.user!.id, { postId: req.params.id }); return rows[0]; }); if (!result) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Published post not found.' } }); return res.json({ success: true, data: { revoked: true, postId: req.params.id } }); });

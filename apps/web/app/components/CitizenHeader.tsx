@@ -11,6 +11,7 @@ import {
   FiMapPin,
   FiLogOut,
   FiChevronDown,
+  FiMessageCircle,
 } from 'react-icons/fi';
 import { apiFetch, logout } from '../../lib/api/client';
 import { CiviqueLogo } from '../../components/CiviqueLogo';
@@ -37,6 +38,7 @@ export default function CitizenHeader() {
 
   const navItems = [
     { name: 'Home', href: '/', icon: FiHome },
+    { name: 'Socio Feed', href: '/socio', icon: FiMessageCircle },
     { name: 'Live Map', href: '/map', icon: FiMap },
     { name: 'Report Issue', href: '/report', icon: FiPlusCircle },
     { name: 'My Grievances', href: '/profile', icon: FiUser },
